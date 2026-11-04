@@ -7,7 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
+#if defined(__APPLE__)
+/* Darwin declares sched_yield in <sched.h>; keep the declaration local so the
+ * iOS SDK does not need the header. */
+extern int sched_yield(void);
+#else
 #include <sched.h>
+#endif
 #include <pthread.h>
 
 typedef struct {

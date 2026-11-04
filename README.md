@@ -40,6 +40,7 @@ and Linux (experimental AppImage).
   - [Contents](#contents)
   - [Screenshots](#screenshots)
   - [Android (ARM64, this branch)](#android-arm64-this-branch)
+  - [iOS (experimental)](#ios-experimental)
   - [Download and play](#download-and-play)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
   - [What works](#what-works)
@@ -97,6 +98,22 @@ The [Chinese version of this file](README.zh.md) has the full details: what diff
 from upstream (including a table of what upstream 3.0.0 ships and what still needs
 the ARM64 rewrite), how the on-screen layout is built, and how to import saves from a
 zip.
+
+## iOS (experimental)
+
+The iOS port lives in [`ios/`](ios/README.md). It is a native app, not a wrapper:
+the runtime is rebuilt as Mach-O and the game's x86-64 code runs on FEXCore, with
+the JIT and memory layer from [Madeira](https://github.com/willfaust/Madeira).
+
+What runs today: the StikDebug JIT pool (BRK `#0xf00d`, RW alias, no-footprint),
+Memory+ entitlements and the 512 GB address map, the guest's user window, the
+stock loader/HLE, and FEXCore starting the guest. The Vulkan/MoltenVK renderer
+is still a stub, so a session stops at the first graphics call; the app says so in
+its Runtime card and log instead of pretending otherwise.
+
+The build is an unsigned IPA from `.github/workflows/ios.yml` (macOS runner, FEXCore
+built first). The prepared folder (`boot.bin`) must be made on a computer with
+`scripts/prepare.py`, because iOS cannot run the Python preparation step.
 
 ## Download and play
 

@@ -54,3 +54,7 @@ launcher-rust/target/
 launcher-rust/.cargo/config.toml
 # gport: 交叉编译配置含本机绝对路径，各机器自己生成，不入库
 launcher-rust/.cargo/
+
+# iOS: FEX static libraries built by ios/scripts/build-fex-ios.sh
+/third_party/FEX/build-ios/
+

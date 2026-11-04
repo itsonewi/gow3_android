@@ -5,10 +5,14 @@ on:
     branches: [arm, main, ios]
     paths:
       - "ios/**"
+      - "src/**"
+      - "cpu/**"
       - ".github/workflows/ios.yml"
   pull_request:
     paths:
       - "ios/**"
+      - "src/**"
+      - "cpu/**"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
 
@@ -20,12 +24,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  checks:
+    name: iOS tree checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: pip install pyyaml
+      - name: Structural checks
+        run: python -m unittest discover -s ios/tests -v
+
   build:
     name: Build unsigned IPA (${{ matrix.os }})
     # GitHub-hosted macOS capacity is shared across labels; run both an ARM and
     # an Intel image so whichever pool frees up first produces the IPA.
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -43,13 +63,35 @@ jobs:
           xcodebuild -version
           xcode-select -p
           uname -m
+          cmake --version
+          ninja --version
 
       - name: Install XcodeGen
         run: |
           if ! command -v xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
+          if ! command -v ninja >/dev/null 2>&1; then
+            brew install ninja
+          fi
           xcodegen --version
+          ninja --version
+
+      - name: Fetch FEX (Madeira's iOS fork)
+        run: bash ios/scripts/fetch-fex.sh
+        env:
+          FEX_REF: main
+
+      - name: Cache FEX iOS libraries
+        uses: actions/cache@v4
+        with:
+          path: third_party/FEX/build-ios
+          key: fex-ios-${{ runner.os }}-${{ hashFiles('third_party/FEX/FEXCore/include/FEXCore/Core/HostFeatures.h') }}-v1
+
+      - name: Build FEXCore for iOS
+        run: bash ios/scripts/build-fex-ios.sh
+        env:
+          JOBS: 4
 
       - name: Generate Xcode project
         working-directory: ios
@@ -77,6 +119,9 @@ jobs:
           set -euo pipefail
           APP="ios/build/Build/Products/Release-iphoneos/SpartanPort.app"
           test -d "$APP"
+          # The memory host extension must survive in PlugIns; without it the
+          # app still runs, only the Memory+ donation experiment is missing.
+          ls -la "$APP/PlugIns" || true
           rm -rf dist
           mkdir -p dist/Payload dist/signing
           cp -R "$APP" dist/Payload/
@@ -89,15 +134,14 @@ jobs:
 
           For the runtime to work, that tool must sign the app with these
           entitlements (dist/signing/SpartanPort.entitlements):
-            com.apple.developer.kernel.increased-memory-limit   (Memory+)
-            com.apple.developer.kernel.extended-virtual-addressing (64 GB map)
-            get-task-allow                                      (StikDebug / JIT)
-            com.apple.security.cs.allow-jit
+            com.apple.developer.kernel.increased-memory-limit     (Memory+)
+            com.apple.developer.kernel.extended-virtual-addressing (512 GB map)
+            get-task-allow                                        (StikDebug JIT)
 
-          A free/standard development profile normally carries get-task-allow
-          but may not carry the two kernel entitlements. If Settings shows
-          Memory+ or Extended VA as missing, the signature - not this build -
-          is what needs changing.
+          Memory+ is not a switch: a profile that drops the two kernel
+          entitlements makes the guest's mappings fail (the guest's user
+          window starts at 64 GiB, above the 63 GiB default map), and the app's
+          Memory card shows that at run time.
           EOF
           cd dist
           zip -qry SpartanPort-unsigned.ipa Payload

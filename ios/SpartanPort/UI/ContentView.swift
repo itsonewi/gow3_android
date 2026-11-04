@@ -19,6 +19,7 @@ struct ContentView: View {
                     jitCard
                     memoryCard
                     gameCard
+                    playCard
                     runtimeCard
                     logCard
                 }
@@ -234,6 +235,8 @@ struct ContentView: View {
             row("Physical RAM", "\(ProcessInfo.processInfo.physicalMemory >> 20) MB")
             row("Available to app", "\(runtime.availableMemory >> 20) MB")
             row("Address map", runtime.addressMap.description)
+            row("App image", runtime.appImage.description)
+            row("Guest user window", "0x1000000000 – 0xfc00000000")
             row("Increased memory", runtime.entitlements.increasedMemory ? "granted" : "not granted")
             row("Extended VA", runtime.entitlements.extendedVA ? "granted" : "not granted")
             row("get-task-allow", runtime.signing.debuggable ? "granted" : "not granted")
@@ -241,7 +244,9 @@ struct ContentView: View {
 
             Text("Memory+ cannot be enabled by a switch. The signing certificate or sideloading tool must grant "
                  + "com.apple.developer.kernel.increased-memory-limit and "
-                 + "com.apple.developer.kernel.extended-virtual-addressing.")
+                 + "com.apple.developer.kernel.extended-virtual-addressing. The guest maps its image, "
+                 + "direct memory and handles above 64 GiB, so the extended-VA entitlement is what makes "
+                 + "the guest's first mapping possible; the address-map row shows whether this copy has it.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -251,11 +256,11 @@ struct ContentView: View {
     // MARK: - Game folder
 
     private var gameCard: some View {
-        card(title: "Game", subtitle: "Folder with eboot.bin, sce_module and sce_sys") {
+        card(title: "Game", subtitle: "Prepared runtime folder (boot.bin) and the game dump") {
             HStack(spacing: 12) {
-                Image(systemName: library.hasGame ? "checkmark.seal.fill" : "folder.badge.plus")
+                Image(systemName: library.isPrepared ? "checkmark.seal.fill" : "folder.badge.plus")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(library.hasGame ? .green : .orange)
+                    .foregroundStyle(library.isPrepared ? .green : .orange)
                     .frame(width: 40, height: 40)
                     .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 11))
 
@@ -263,9 +268,13 @@ struct ContentView: View {
                     Text(library.displayName)
                         .font(.system(size: 13.5, weight: .semibold))
                         .lineLimit(1)
-                    Text(library.hasGame ? "eboot.bin found" : "No valid game folder imported")
+                    Text(library.isPrepared
+                         ? "boot.bin found · the runtime can start"
+                         : (library.hasGame ? "eboot.bin found, but the folder is not prepared"
+                                            : "No valid folder imported"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
                 Spacer()
             }
@@ -285,6 +294,15 @@ struct ContentView: View {
                 }
             }
 
+            if library.folder != nil && !library.isPrepared {
+                Text("This port needs the prepared folder (boot.bin, imports and patches). It is produced "
+                     + "on a computer by scripts/prepare.py from the game dump: the iOS app cannot run "
+                     + "Python, and the Android package's AppImage cannot run here either.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let error = library.importError {
                 Text(error)
                     .font(.system(size: 11.5))
@@ -293,24 +311,35 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Play
+
+    private var playCard: some View {
+        PlaySection(session: runtime.session,
+                    prepared: library.isPrepared,
+                    jitReady: runtime.jitState == .ready,
+                    play: { cpuOnly in runtime.play(game: library, cpuOnly: cpuOnly) },
+                    stop: { runtime.stop() })
+    }
+
     // MARK: - Runtime roadmap
 
     private var runtimeCard: some View {
-        card(title: "Runtime", subtitle: "Bringing the native ARM64 runtime to iOS") {
+        card(title: "Runtime", subtitle: "What this build really runs") {
             stage("1", "iOS host + JIT + Memory+", done: true,
-                  detail: "This build: SwiftUI shell, StikDebug JIT, entitlements.")
-            stage("2", "FEXCore iOS static libraries", done: false,
-                  detail: "willfaust/FEX ios-port-2607, linked from CI.")
-            stage("3", "Memory map + ELF/PS4 loader", done: false,
-                  detail: "0x0800000000–0x0f00000000 guest window via mach_vm_map.")
+                  detail: "StikDebug, BRK #0xf00d pool, no-footprint, entitlements.")
+            stage("2", "FEXCore iOS + pool allocator", done: true,
+                  detail: "Executable mappings come from the debugger pool, not mmap(PROT_EXEC).")
+            stage("3", "PS4 memory + loader + core HLE", done: true,
+                  detail: "The stock probe/runtime sources, guest window, Mach-based shims; "
+                        + "audio/video/pad entry points are stubs.")
             stage("4", "GPU: shadPS4 → Vulkan → MoltenVK", done: false,
-                  detail: "Metal surface, MoltenVK, SDL3 window on UIKit.")
-            stage("5", "Audio/video + launcher", done: false,
-                  detail: "FFmpeg, Atrac9, save data and controller input.")
+                  detail: "The CPU-only bring-up stops at the first graphics call; the GPU stub "
+                        + "reports it in the log.")
+            stage("5", "Audio/video + touch controls", done: false,
+                  detail: "FFmpeg, AudioToolbox, GameController and MoltenVK are the next target.")
 
-            Text("The Android branch's runtime is Linux/glibc ELF and cannot run on iOS as-is. "
-                 + "The code is being ported piece by piece; this screen reports the real state of each layer.")
-                .font(.system(size: 11))
+            Text(runtime.runtimeBuild)
+                .font(.system(size: 10.5, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -444,6 +473,91 @@ struct ContentView: View {
             endPoint: .bottom
         )
         .ignoresSafeArea()
+    }
+}
+
+// MARK: - Play
+
+/// The Play card. It owns its own observation of the session so the running
+/// state updates without re-rendering the whole screen.
+struct PlaySection: View {
+    @ObservedObject var session: GameSession
+    let prepared: Bool
+    let jitReady: Bool
+    let play: (Bool) -> Void
+    let stop: () -> Void
+
+    private var canPlay: Bool { prepared && jitReady && !session.isRunning }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Play")
+                    .font(.system(size: 15, weight: .bold))
+                Text("Starts the ported runtime on the JIT pool")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    play(true)
+                } label: {
+                    Label(session.isRunning ? "Running" : "Play", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!canPlay)
+
+                if session.isRunning {
+                    Button("Stop") { stop() }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("CPU only · the Vulkan/MoltenVK renderer is not linked in this build")
+                    .font(.system(size: 12.5, weight: .medium))
+                Text("The stock loader, HLE, PS4 memory and FEX run; the guest stops at its first "
+                     + "missing HLE import (normally graphics), and the log names it.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Text("Session")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(session.state.label)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(session.isRunning ? .green : .secondary)
+            }
+
+            if !prepared {
+                Text("Import the prepared runtime folder first.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+            } else if !jitReady {
+                Text("Enable JIT and allocate the pool first; FEX cannot allocate executable memory "
+                     + "without it.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+            }
+
+            if let error = session.lastError {
+                Text(error)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.red.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.06), lineWidth: 1)
+        )
     }
 }
 

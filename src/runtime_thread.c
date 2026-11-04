@@ -12,7 +12,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#if defined(__APPLE__)
+extern int sched_yield(void);
+#else
 #include <sched.h>
+#endif
 #include <setjmp.h>
 #include <errno.h>
 #include <unistd.h>
@@ -23,7 +27,9 @@
 #else
 #include <dirent.h>
 #include <sys/resource.h>
+#if !defined(__APPLE__)
 #include <sys/syscall.h>
+#endif
 #include <sys/mman.h>
 #endif
 #define ERR(n) ((int32_t)(UINT32_C(0x80020000)|(n)))
@@ -291,7 +297,13 @@ static ABI int32_t attr_set_guard(ThreadAttr **slot,uint64_t size) {
 static void set_host_name(const char *name) {
     char host[16]={0};
     memcpy(host,name,strnlen(name,sizeof(host)-1));
+#if defined(__APPLE__)
+    /* Darwin names the calling thread and rejects names longer than 63 bytes;
+     * the guest's 15-character name fits. */
+    sp_set_thread_name(host);
+#else
     pthread_setname_np(pthread_self(),host);
+#endif
 #ifdef _WIN32
     /* winpthreads only names the thread for an attached debugger; the CPU report reads this. */
     wchar_t wide[32];
@@ -311,6 +323,11 @@ static void set_host_priority(const char *name,int guest_prio) {
 #ifdef _WIN32
     if (!SetThreadPriority(GetCurrentThread(),lower ? THREAD_PRIORITY_BELOW_NORMAL : THREAD_PRIORITY_ABOVE_NORMAL))
         printf("Runtime: cannot change the priority of '%s' (%lu)\n",name,GetLastError());
+#elif defined(__APPLE__)
+    /* Darwin has no thread nice value; PRIO_DARWIN_THREAD lowers the calling
+     * thread only. Raising a guest driver thread needs none of it. */
+    if (lower && sp_set_thread_priority(1))
+        printf("Runtime: cannot change the priority of '%s' (%d)\n",name,errno);
 #else
     /* Raising needs CAP_SYS_NICE; without it the thread keeps the normal priority. */
     if (setpriority(PRIO_PROCESS,(id_t)syscall(SYS_gettid),lower ? 5 : -5) && lower)
@@ -537,6 +554,10 @@ static size_t live_thread_cpu(ThreadCpu *out,size_t max) {
         CloseHandle(h);
     }
     CloseHandle(snap);
+#elif defined(__APPLE__)
+    /* No /proc/self/task on iOS. The CPU report then lists no per-thread times;
+     * the guest's own counters and the session's log still work. */
+    (void)max;
 #else
     DIR *dir=opendir("/proc/self/task");
     if (!dir) return 0;
@@ -572,6 +593,8 @@ static void cpu_report(void) {
 #ifdef _WIN32
     DWORD_PTR process_mask=0, system_mask=0;
     if (GetProcessAffinityMask(GetCurrentProcess(),&process_mask,&system_mask)) hw=__builtin_popcountll(process_mask);
+#elif defined(__APPLE__)
+    hw=sp_active_cpu_count();
 #else
     cpu_set_t set; CPU_ZERO(&set);
     if (!sched_getaffinity(0,sizeof(set),&set)) hw=CPU_COUNT(&set);

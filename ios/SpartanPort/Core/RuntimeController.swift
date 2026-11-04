@@ -1,9 +1,14 @@
 import Foundation
 import UIKit
+import Darwin
 
-/// Owns the JIT session and the memory probes shown on the main screen.
-/// The actual BRK protocol lives in Native/JITAllocator.c; this class only
-/// drives the StikDebug URL flow and keeps SwiftUI state.
+/// Owns the JIT session (StikDebug + the pool) and the guest session.
+///
+/// The JIT flow is Madeira's: open StikDebug's `enable-jit` URL with
+/// spartanport-jit.js, wait for CS_DEBUGGED, allocate the pool with
+/// sp_pool_prepare (BRK #0xf00d, vm_remap RW alias, no-footprint), detach the
+/// debugger and keep the pool for FEX. Everything the guest does afterwards
+/// happens in the runtime library on a worker thread.
 @MainActor
 final class RuntimeController: ObservableObject {
     enum JITState: Equatable {
@@ -19,7 +24,7 @@ final class RuntimeController: ObservableObject {
             case .enabling: return "Waiting for StikDebug…"
             case .attached: return "Debugger attached"
             case .ready: return "JIT ready"
-            case .failed: return "Failed"
+            case .failed(let message): return message
             }
         }
     }
@@ -32,30 +37,46 @@ final class RuntimeController: ObservableObject {
     @Published private(set) var debuggerAttached = false
     @Published private(set) var stikDebugInstalled = false
     @Published private(set) var availableMemory: UInt64 = 0
-    @Published var poolSizeMB: Int = 512
+    @Published private(set) var appImage = AppImageRange.current()
+    @Published private(set) var runtimeBuild = ""
+    @Published var poolSizeMB: Int = JITPoolAllocator.suggestedSizeMB()
     @Published private(set) var busy = false
+
+    /// The guest session, created by play(). ContentView observes it directly.
+    @Published private(set) var session = GameSession()
 
     private var waiter: Timer?
 
     init() {
         jit_install_trap_handler()
+        sp_set_log(spartanPortLogHook, nil)
+        runtimeBuild = String(cString: sp_build_info())
         refresh()
+        let device = UIDevice.current
         LogStore.shared.log(
-            "[startup] \(UIDevice.current.model) \(UIDevice.current.systemName) "
+            "[startup] \(device.model) \(device.systemName) "
             + "\(ProcessInfo.processInfo.operatingSystemVersionString) "
             + "available=\(ProcessInfo.processInfo.physicalMemory >> 20)MB",
-            level: .info
-        )
+            level: .info)
         LogStore.shared.log("[startup] address map \(addressMap.description)", level: .info)
+        LogStore.shared.log("[startup] app image \(appImage.description)", level: .info)
+        LogStore.shared.log("[startup] runtime: \(runtimeBuild)", level: .info)
         LogStore.shared.log(
-            "[startup] entitlements: allow-jit=\(entitlements.jitAllowed ? 1 : 0) "
-            + "increased-memory=\(entitlements.increasedMemory ? 1 : 0) "
-            + "extended-va=\(entitlements.extendedVA ? 1 : 0)",
-            level: entitlements.increasedMemory && entitlements.extendedVA ? .success : .warning
-        )
+            "[startup] entitlements: increased-memory=\(entitlements.increasedMemory ? 1 : 0) "
+            + "extended-va=\(entitlements.extendedVA ? 1 : 0) "
+            + "allow-jit=\(entitlements.jitAllowed ? 1 : 0)",
+            level: entitlements.increasedMemory && entitlements.extendedVA ? .success : .warning)
         if !signing.debuggable {
             LogStore.shared.log("[startup] \(SigningStatus.notDebuggableMessage)", level: .error)
         }
+        // The PS4 user window starts at 64 GiB; without extended virtual
+        // addressing every guest mapping fails, so say so before a session.
+        sp_check_guest_window()
+        sp_log_address_space()
+
+        // Memory+ experiment: with SPARTAN_MEMORY_HOST=1, start the extension
+        // that iOS leaves without a jetsam limit and log its budget.
+        MemoryDonor.probe()
     }
 
     func refresh() {
@@ -65,6 +86,7 @@ final class RuntimeController: ObservableObject {
         debuggerAttached = isDebuggerAttached()
         stikDebugInstalled = Self.stikDebugURL != nil
         availableMemory = jit_available_memory()
+        appImage = AppImageRange.current()
     }
 
     private static var stikDebugURL: URL? {
@@ -84,9 +106,7 @@ final class RuntimeController: ObservableObject {
         return try? Data(contentsOf: url)
     }
 
-    /// Open StikDebug with our bundled script, targeting this process. StikDebug
-    /// attaches, runs the script and services the BRK requests. The user comes
-    /// back to SpartanPort; `waitForDebugger` then observes CS_DEBUGGED.
+    /// Open StikDebug with our bundled script, targeting this process.
     func enableJIT() {
         guard !busy else { return }
         refresh()
@@ -96,8 +116,8 @@ final class RuntimeController: ObservableObject {
             return
         }
         guard let base = Self.stikDebugURL else {
-            fail("StikDebug is not installed (stikdebug:// scheme not found). "
-                 + "Install StikDebug, then tap Enable JIT again.")
+            fail("StikDebug is not installed (stikdebug:// scheme not found). Install StikDebug, "
+                 + "then tap Enable JIT again.")
             return
         }
         guard let bundleID = Bundle.main.bundleIdentifier, let scriptData else {
@@ -141,18 +161,18 @@ final class RuntimeController: ObservableObject {
                     timer.invalidate()
                     return
                 }
-                if self.csDebugged() {
+                if self.csDebugged() && isDebuggerAttached() {
                     timer.invalidate()
                     self.waiter = nil
                     self.debuggerAttached = isDebuggerAttached()
                     self.jitState = .attached
                     LogStore.shared.log("[jit] CS_DEBUGGED is set; debugger attached", level: .success)
-                    self.preparePoolAutomatically()
+                    self.preparePool()
                 } else if Date() >= deadline {
                     timer.invalidate()
                     self.waiter = nil
-                    self.fail("StikDebug did not attach within 90 seconds. Check its pairing file and LocalDevVPN, "
-                              + "then try again.")
+                    self.fail("StikDebug did not attach within 90 seconds. Check its pairing file and "
+                              + "LocalDevVPN, then try again.")
                 }
             }
         }
@@ -160,14 +180,8 @@ final class RuntimeController: ObservableObject {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    private func preparePoolAutomatically() {
-        guard pool == nil else { return }
-        preparePool()
-    }
-
-    /// Allocate the dual-mapped pool, then detach the debugger. Everything that
-    /// needs BRK (FEX code buffers) uses this pool; iOS does not let us create
-    /// executable pages any other way.
+    /// Allocate the pool, then detach. Everything FEX executes afterwards comes
+    /// from these pages; iOS offers no other route to executable memory.
     func preparePool() {
         guard !busy else { return }
         refresh()
@@ -175,6 +189,7 @@ final class RuntimeController: ObservableObject {
             fail("Enable JIT first: StikDebug must be attached to answer the pool request.")
             return
         }
+        guard pool == nil else { return }
 
         busy = true
         let megabytes = max(64, min(poolSizeMB, 1024))
@@ -182,8 +197,8 @@ final class RuntimeController: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let newPool = try JITMemory.allocate(size: megabytes << 20)
-                JITMemory.detachDebugger()
+                let newPool = try JITPoolAllocator.allocate(sizeMB: megabytes)
+                JITPoolAllocator.detach()
                 DispatchQueue.main.async {
                     self.pool = newPool
                     self.jitState = .ready
@@ -191,9 +206,7 @@ final class RuntimeController: ObservableObject {
                     self.refresh()
                     LogStore.shared.log(
                         "[jit] pool ready: RX \(newPool.rxDescription) RW \(newPool.rwDescription) "
-                        + "\(newPool.sizeDescription)",
-                        level: .success
-                    )
+                        + "\(newPool.sizeDescription)", level: .success)
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -209,19 +222,59 @@ final class RuntimeController: ObservableObject {
             LogStore.shared.log("[jit] no debugger session to detach", level: .warning)
             return
         }
-        JITMemory.detachDebugger()
+        JITPoolAllocator.detach()
         refresh()
     }
 
     func testMapping() {
         LogStore.shared.log("[jit] running non-executing mapping probe…", level: .info)
         DispatchQueue.global(qos: .userInitiated).async {
-            let ok = JITMemory.testMapping()
+            let ok = JITPoolAllocator.testMapping()
             DispatchQueue.main.async {
                 LogStore.shared.log("[jit] mapping probe \(ok ? "passed" : "failed")",
                                     level: ok ? .success : .error)
             }
         }
+    }
+
+    // MARK: - Playing the port
+
+    /// Starts the guest. The prepared folder is the one holding boot.bin (made
+    /// on a computer by scripts/prepare.py from the user's dump).
+    func play(game: GameLibrary, cpuOnly: Bool) {
+        guard !busy else { return }
+        refresh()
+        guard entitlements.extendedVA else {
+            fail("This copy is missing com.apple.developer.kernel.extended-virtual-addressing. The "
+                 + "guest maps its image and memory above 64 GiB, outside the default 63 GiB map, so "
+                 + "the first mapping would fail. Reinstall with a profile that grants it.")
+            return
+        }
+        guard let prepared = game.preparedFolder else {
+            fail("Import a prepared runtime folder (the one with boot.bin). The game dump alone "
+                 + "cannot be prepared on iOS: run scripts/prepare.py on a computer first.")
+            return
+        }
+        guard pool != nil else {
+            fail("Enable JIT first: the guest's CPU is FEX's JIT and needs the pool.")
+            return
+        }
+        guard let userDir = Self.userDirectory() else { return }
+        session.start(gameDirectory: prepared, app0: game.dumpFolder, userDirectory: userDir,
+                      pool: pool, cpuOnly: cpuOnly)
+    }
+
+    func stop() {
+        _ = sp_session_stop()
+        session.refresh()
+    }
+
+    static func userDirectory() -> URL? {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        guard let base else { return nil }
+        let url = base.appendingPathComponent("SpartanPort", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
     }
 
     /// Reads CS_DEBUGGED without logging, for the 0.5 s poll.
@@ -233,5 +286,31 @@ final class RuntimeController: ObservableObject {
     private func fail(_ message: String) {
         jitState = .failed(message)
         LogStore.shared.log("[jit] \(message)", level: .error)
+    }
+}
+
+/// Where the app's own Mach-O image landed, from dyld image 0.
+struct AppImageRange {
+    let base: UInt64
+    let end: UInt64
+    let known: Bool
+
+    static func current() -> AppImageRange {
+        var base: UInt = 0
+        var end: UInt = 0
+        jit_app_image_range(&base, &end)
+        return AppImageRange(base: UInt64(base), end: UInt64(end), known: end > base)
+    }
+
+    var description: String {
+        guard known else { return "unknown" }
+        return String(format: "0x%llx – 0x%llx", base, end)
+    }
+
+    /// The guest maps its image, direct-memory views and handles in
+    /// [0x1000000000, 0xfc00000000); an app image inside that range would
+    /// collide with them.
+    var overlapsGuestWindow: Bool {
+        known && end > 0x1_0000_0000 && base < 0xfc_0000_0000
     }
 }

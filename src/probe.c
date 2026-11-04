@@ -30,14 +30,18 @@
 #include <windows.h>
 #else
 #include <sys/mman.h>
+#if !defined(__APPLE__)
 #include <malloc.h>
+#endif
 #include <unistd.h>
 #include <signal.h>
 #include <ucontext.h>
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <execinfo.h>
+#if !defined(__APPLE__)
 #include <sys/syscall.h>
+#endif
 #include <sys/uio.h>
 #endif
 
@@ -84,7 +88,15 @@ static void protect(void *p, size_t size, unsigned flags) {
     if (!VirtualProtect(p, size, mode, &old)) fail("VirtualProtect failed");
     FlushInstructionCache(GetCurrentProcess(), p, size);
 #else
-    int mode = ((flags & 4) ? PROT_READ : 0) | ((flags & 2) ? PROT_WRITE : 0) | ((flags & 1) ? PROT_EXEC : 0);
+    int mode = ((flags & 4) ? PROT_READ : 0) | ((flags & 2) ? PROT_WRITE : 0);
+#if !defined(__APPLE__)
+    /* Guest code is data to FEX: iOS never executes it, and asking TXM for
+     * PROT_EXEC on non-JIT pages makes the loader fail. */
+    if (flags & 1) mode |= PROT_EXEC;
+#else
+    /* FEX reads guest code, so an execute-only segment still needs READ. */
+    if (flags & 1) mode |= PROT_READ;
+#endif
     if (mprotect(p, size, mode)) fail("mprotect failed");
 #endif
 }
@@ -289,8 +301,15 @@ static void dump_frames(ucontext_t *uc) {
         write_hex(line+6,tid); write_hex(line+27,rip); write_hex(line+59,rip-(uintptr_t)image); write_hex(line+90,rip-exe_base);
         { ssize_t written_=write(2,line,sizeof(line)-1); (void)written_; }
         uintptr_t frame[2];
+#ifdef __APPLE__
+        /* iOS is one address space and has no process_vm_readv(2). Read through
+         * mach_vm_read_overwrite so a wild frame cannot fault the watchdog. */
+        int sp_process_read(uintptr_t, void *, size_t);
+        if (!rbp || sp_process_read(rbp, frame, sizeof(frame)) != 0) break;
+#else
         struct iovec local={frame,sizeof(frame)}, remote={(void *)rbp,sizeof(frame)};
         if (!rbp || process_vm_readv(getpid(),&local,1,&remote,1,0)!=(ssize_t)sizeof(frame)) break;
+#endif
         if (frame[0]<=rbp) break;
         rbp=frame[0]; rip=frame[1];
     }
@@ -301,6 +320,7 @@ static void watchdog(int sig, siginfo_t *info, void *context) {
     const char head[]="STOP: watchdog timeout; thread stacks:\n";
     { ssize_t written_=write(2,head,sizeof(head)-1); (void)written_; }
     dump_frames(context);
+#ifndef __APPLE__
     int dir=open("/proc/self/task",O_RDONLY|O_DIRECTORY);
     char buffer[4096];
     long n;
@@ -312,6 +332,9 @@ static void watchdog(int sig, siginfo_t *info, void *context) {
             if (tid>0 && tid!=self) { syscall(SYS_tgkill,getpid(),tid,SIGUSR2); usleep(20000); }
             at+=d->reclen;
         }
+#else
+    /* No /proc: dump the interrupted thread (the only one this handler runs on). */
+#endif
     usleep(100000);
     _exit(128 + sig);
 }
@@ -1271,6 +1294,10 @@ void runtime_restart(void) {
     CloseHandle(process.hThread); CloseHandle(process.hProcess);
     /* The new launch waits for this process's GPU device to go away (run.py --after). */
     TerminateProcess(GetCurrentProcess(),0);
+#elif defined(__APPLE__)
+    /* iOS cannot exec a new process; the launcher restarts the app instead. */
+    puts("Runtime: restart requested; on iOS quit and start the port again");
+    _exit(1);
 #else
     puts("Runtime: restarting through run.sh");
     syscall(SYS_close_range, 3u, ~0u, 0u);

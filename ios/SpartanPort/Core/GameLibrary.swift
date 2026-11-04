@@ -24,6 +24,40 @@ final class GameLibrary: ObservableObject {
         return FileManager.default.fileExists(atPath: eboot.path)
     }
 
+    /// The prepared runtime folder: the one that holds boot.bin. A folder with
+    /// the game dump is not enough; scripts/prepare.py (which needs Python) has
+    /// to run on a computer first, and the result is imported here.
+    var preparedFolder: URL? {
+        guard let folder else { return nil }
+        let manager = FileManager.default
+        if manager.fileExists(atPath: folder.appendingPathComponent("boot.bin").path) { return folder }
+        // The picker often lands on the parent (e.g. the "dist" folder that
+        // holds the prepared runtime next to the dump).
+        if let children = try? manager.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey],
+                                                           options: [.skipsHiddenFiles]) {
+            for child in children {
+                let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                if isDirectory, manager.fileExists(atPath: child.appendingPathComponent("boot.bin").path) {
+                    return child
+                }
+            }
+        }
+        return nil
+    }
+
+    var isPrepared: Bool { preparedFolder != nil }
+
+    /// The game dump, when the imported folder is (or contains) it; used for
+    /// param.sfo, trophy data and the pause-menu WAD.
+    var dumpFolder: URL? {
+        guard let folder else { return nil }
+        if FileManager.default.fileExists(atPath: folder.appendingPathComponent("sce_sys").path) {
+            return folder
+        }
+        if let prepared = preparedFolder, prepared != folder { return folder }
+        return nil
+    }
+
     var displayName: String {
         folder?.lastPathComponent ?? "No game folder"
     }

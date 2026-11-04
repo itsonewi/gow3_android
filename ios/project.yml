@@ -12,8 +12,65 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     CLANG_ENABLE_MODULES: YES
+    CLANG_CXX_LANGUAGE_STANDARD: "c++20"
+    GCC_C_LANGUAGE_STANDARD: "gnu11"
+    CLANG_CXX_LIBRARY: "libc++"
 
 targets:
+  # ---------------------------------------------------------------------------
+  # The iOS runtime: stock loader + HLE + FEX glue + platform shims.
+  # ---------------------------------------------------------------------------
+  SpartanRuntime:
+    type: staticLibrary
+    platform: iOS
+    sources:
+      - path: Runtime
+      - path: ../src/runtime.c
+      - path: ../src/runtime_kernel.c
+      - path: ../src/runtime_memory.c
+      - path: ../src/runtime_mutex.c
+      - path: ../src/runtime_rwlock.c
+      - path: ../src/runtime_sema.c
+      - path: ../src/runtime_thread.c
+      - path: ../src/runtime_time.c
+      - path: ../src/runtime_file.c
+      - path: ../src/runtime_services.c
+      - path: ../src/runtime_savedata.c
+      - path: ../src/runtime_content.c
+      - path: ../src/runtime_rtc.c
+    settings:
+      base:
+        PRODUCT_NAME: SpartanRuntime
+        # sp_compat.h supplies memfd_create, gettid, fallocate, mallopt and the
+        # other Linux-only names the stock runtime uses (see the header).
+        OTHER_CFLAGS: "$(inherited) -include \"$(SRCROOT)/Runtime/platform/sp_compat.h\""
+        OTHER_CPLUSPLUSFLAGS: "$(inherited)"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Runtime/include"
+          - "$(SRCROOT)/Runtime/platform"
+          - "$(SRCROOT)/../src"
+          - "$(SRCROOT)/.."
+          - "$(SRCROOT)/../third_party/FEX/FEXCore/include"
+          - "$(SRCROOT)/../third_party/FEX/FEXCore/Source/Interface/Config"
+          - "$(SRCROOT)/../third_party/FEX/Source"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/generated"
+          - "$(SRCROOT)/../third_party/FEX/External/fmt/include"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/fmt/include"
+          - "$(SRCROOT)/../third_party/FEX/External/range-v3/include"
+          - "$(SRCROOT)/../third_party/FEX/External/unordered_dense/include"
+          - "$(SRCROOT)/../third_party/FEX/External/xxhash"
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - "SPARTAN_IOS=1"
+
+  # ---------------------------------------------------------------------------
+  # The app: SwiftUI launcher, JIT/memory layer, game import, Play.
+  #
+  # The guest's user window starts at 64 GiB (PS4 USER_MIN, see
+  # src/runtime_memory.c), so the process needs the extended-virtual-addressing
+  # entitlement (512 GiB map) and the app's own image can stay at the normal
+  # 0x100000000. The memory card reports both facts at run time.
+  # ---------------------------------------------------------------------------
   SpartanPort:
     type: application
     platform: iOS
@@ -22,6 +79,10 @@ targets:
         excludes:
           - "Resources/Info.plist"
           - "Resources/SpartanPort.entitlements"
+    dependencies:
+      - target: SpartanRuntime
+      - target: SpartanPortMemoryHost
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport
@@ -32,8 +93,21 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_BITCODE: NO
-        CLANG_CXX_LANGUAGE_STANDARD: "c++20"
-        OTHER_LDFLAGS: "$(inherited) -lc++"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Runtime/include"
+          - "$(SRCROOT)/Shared"
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - "SPARTANPORT_RUNTIME=1"
+        OTHER_LDFLAGS: >-
+          $(inherited) -lFEXCore -lFEXCore_Base -lJemallocLibs
+          -lfmt -lcephes_128bit -lsoftfloat_3e -lxxhash -lc++ -lz -lxpc
+        LIBRARY_SEARCH_PATHS:
+          - "$(SRCROOT)/../third_party/FEX/build-ios/FEXCore/Source"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/fmt"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/cephes"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/SoftFloat-3e"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/xxhash/cmake_unofficial"
       configs:
         Release:
           SWIFT_OPTIMIZATION_LEVEL: "-O"
@@ -41,3 +115,26 @@ targets:
       gatherCoverageData: false
       commandLineArguments:
         "-SPDebug": false
+
+  # ---------------------------------------------------------------------------
+  # Memory+: the extension on com.apple.ar.viewer that iOS 27's jetsam table
+  # leaves without a memory limit. Same experiment as Madeira's
+  # MadeiraMemoryHost: it creates memory objects for the app on request.
+  # ---------------------------------------------------------------------------
+  SpartanPortMemoryHost:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SpartanPortMemoryHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport.memoryhost
+        PRODUCT_NAME: SpartanPortMemoryHost
+        INFOPLIST_FILE: SpartanPortMemoryHost/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SpartanPortMemoryHost/MemoryHost.entitlements
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CLANG_ENABLE_OBJC_ARC: YES
+        OTHER_LDFLAGS: "$(inherited) -lxpc"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Shared"

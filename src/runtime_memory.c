@@ -405,13 +405,23 @@ static int pool_create(void) {
 }
 void runtime_memory_reserve(void) {}
 static int host_map(uintptr_t address, uint64_t size, int prot, int reserved, uint64_t phys) {
+#if defined(__APPLE__)
+    /* The guest's code is data to FEX; iOS refuses PROT_EXEC on file-backed
+     * guest memory outside the debugger's JIT pool, so never ask for it. */
+    prot &= ~PROT_EXEC;
+#endif
     void *mapped = !reserved
         ? mmap((void *)address,size,prot,MAP_SHARED|MAP_FIXED,pool_fd,(off_t)phys)
         : mmap((void *)address,size,PROT_NONE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE|MAP_FIXED,-1,0);
     return mapped==MAP_FAILED ? -1 : 0;
 }
 static int host_unmap(uintptr_t address, uint64_t size) { return munmap((void *)address,size); }
-static int host_protect(uintptr_t address, uint64_t size, int prot) { return mprotect((void *)address,size,prot); }
+static int host_protect(uintptr_t address, uint64_t size, int prot) {
+#if defined(__APPLE__)
+    prot &= ~PROT_EXEC;
+#endif
+    return mprotect((void *)address,size,prot);
+}
 static void host_discard(uint64_t phys, uint64_t size) {
     fallocate(pool_fd,FALLOC_FL_PUNCH_HOLE|FALLOC_FL_KEEP_SIZE,(off_t)phys,(off_t)size);
 }
@@ -978,7 +988,14 @@ static void *low_map_from(uintptr_t *next, uintptr_t limit, size_t size, int pro
 #else
     void *p=MAP_FAILED;
     while (*next+size<=limit) {
+#if defined(__APPLE__)
+        /* Darwin has no MAP_FIXED_NOREPLACE. Ask for the address as a hint and
+         * reject the mapping if the kernel chose elsewhere, then advance. */
+        p=mmap((void *)*next,size,prot,MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE,-1,0);
+        if (p!=MAP_FAILED && p!=(void *)*next) { munmap(p,size); p=MAP_FAILED; }
+#else
         p=mmap((void *)*next,size,prot,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
+#endif
         *next+=size+PAGE; /* unmapped gap catches overruns */
         if (p!=MAP_FAILED) break;
     }

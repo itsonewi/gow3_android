@@ -9,12 +9,18 @@
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
+#if defined(__APPLE__)
+extern int sched_yield(void);
+#else
 #include <sched.h>
+#endif
 #include <time.h>
 #include <unistd.h>
 #include <sys/time.h>
 #ifndef _WIN32
+#if !defined(__APPLE__)
 #include <sys/random.h>
+#endif
 #include <sys/resource.h>
 #endif
 #define ERR(n) ((int32_t)(UINT32_C(0x80020000)|(n)))
@@ -48,8 +54,20 @@ static int host_clock(uint32_t id,clockid_t *out) {
     switch (id) {
     case 0: case 9: case 10: *out=CLOCK_REALTIME; return 1;            /* REALTIME(_PRECISE/_FAST) */
     case 4: case 11: case 12: case 5: case 7: case 8: *out=CLOCK_MONOTONIC; return 1; /* MONOTONIC/UPTIME */
-    case 13: *out=CLOCK_REALTIME_COARSE; return 1;                    /* SECOND */
-    case 14: *out=CLOCK_THREAD_CPUTIME_ID; return 1;
+    case 13:
+#if defined(__APPLE__)
+        *out=CLOCK_REALTIME;
+#else
+        *out=CLOCK_REALTIME_COARSE;
+#endif
+        return 1;                                                      /* SECOND */
+    case 14:
+#if defined(__APPLE__)
+        *out=CLOCK_MONOTONIC;
+#else
+        *out=CLOCK_THREAD_CPUTIME_ID;
+#endif
+        return 1;
     case 2: case 15: *out=CLOCK_PROCESS_CPUTIME_ID; return 1;         /* PROF/PROCTIME */
     case 16: case 17: case 18: case 19: *out=CLOCK_MONOTONIC; return 1; /* PS4 network clocks */
     default: return 0;
@@ -233,6 +251,10 @@ static ABI int32_t guest_sysctl(const int32_t *name,uint32_t namelen,void *old,u
         if (!old || !oldlen) return fail_posix(EINVAL);
 #ifdef _WIN32
         if (compat_random(old,(size_t)*oldlen)) return fail_posix(EIO);
+#elif defined(__APPLE__)
+        /* arc4random_buf is the platform CSPRNG; /dev/urandom is not exposed
+         * to the app sandbox for reads on every iOS version. */
+        arc4random_buf(old,(size_t)*oldlen);
 #else
         if (getrandom(old,(size_t)*oldlen,0)<0) return fail_posix(errno);
 #endif
