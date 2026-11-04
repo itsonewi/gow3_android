@@ -183,6 +183,15 @@ bool g_window_ready;
 } // namespace
 
 u32 SpartanDisplayRefreshHz() {
+#if defined(SPARTAN_IOS)
+    extern "C" int sp_ios_display_refresh_hz(void);
+    static const u32 hz = [] {
+        const u32 rate = u32(std::max(60, sp_ios_display_refresh_hz()));
+        std::printf("GPU: vblank follows the display refresh rate, %u Hz\n", rate);
+        return rate;
+    }();
+    return hz;
+#else
     static const u32 hz = [] {
         const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
         const u32 rate = mode && mode->refresh_rate > 0 ? u32(mode->refresh_rate + 0.5f) : 60;
@@ -190,6 +199,7 @@ u32 SpartanDisplayRefreshHz() {
         return std::max<u32>(rate, 60);
     }();
     return hz;
+#endif
 }
 
 #ifdef SPARTAN_PGO_GENERATE

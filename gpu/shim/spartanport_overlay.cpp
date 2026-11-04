@@ -245,9 +245,16 @@ void HeadingRule() {
 }
 
 float PixelDensity(SDL_WindowID id) {
+#if defined(SPARTAN_IOS)
+    // No SDL window on iOS: the Metal view is scaled by the screen.
+    extern "C" float sp_ios_display_scale(void);
+    (void)id;
+    return sp_ios_display_scale();
+#else
     SDL_Window* window = SDL_GetWindowFromID(id);
     const float density = window ? SDL_GetWindowPixelDensity(window) : 1.0f;
     return density > 0.0f ? density : 1.0f;
+#endif
 }
 
 // Marks the settings dirty when a widget changed them.
@@ -2496,6 +2503,12 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
 }
 
 void UpdateTextInput(SDL_Window* window) {
+#if defined(SPARTAN_IOS)
+    // iOS text entry needs a UITextField over the Metal view; the overlay's
+    // in-game text fields are not wired to the keyboard yet.
+    (void)window;
+    return;
+#else
     bool want = false;
     {
         std::scoped_lock lock{imgui_mutex};
@@ -2508,6 +2521,7 @@ void UpdateTextInput(SDL_Window* window) {
             SDL_StopTextInput(window);
         }
     }
+#endif
 }
 
 // imgui_mutex held. The backend frees a texture some frames after its last use.
