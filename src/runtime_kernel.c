@@ -238,7 +238,13 @@ static ABI int32_t guest_getrusage(int who,GuestRusage *out) {
     out->stime=(GuestTimeval){kernel/1000000,kernel%1000000};
 #else
     struct rusage r;
+#if defined(__APPLE__)
+    /* Darwin has no RUSAGE_THREAD; the process total is the closest value. */
+    (void)who;
+    getrusage(RUSAGE_SELF,&r);
+#else
     getrusage(who==0 ? RUSAGE_SELF : RUSAGE_THREAD,&r);
+#endif
     out->utime=(GuestTimeval){r.ru_utime.tv_sec,r.ru_utime.tv_usec};
     out->stime=(GuestTimeval){r.ru_stime.tv_sec,r.ru_stime.tv_usec};
 #endif
