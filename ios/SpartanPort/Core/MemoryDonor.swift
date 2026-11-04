@@ -101,13 +101,13 @@ private final class DonorRequest {
                 LogStore.shared.log("[memory+] extension pid \(pid), it may allocate \(available >> 20) MB",
                                     level: .success)
                 let server = connection.remoteObjectProxy as? MHMemoryServer
-                server?.statusWithReply { _, footprint, available in
+                server?.status(reply: { _, footprint, available in
                     Task { @MainActor in
                         LogStore.shared.log("[memory+] extension footprint \(footprint >> 20) MB, "
                                             + "available \(available >> 20) MB", level: .info)
                         MemoryDonor.finished(self)
                     }
-                }
+                })
             }
         }
         listener.resume()

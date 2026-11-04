@@ -61,7 +61,7 @@ enum JITPoolAllocator {
         for _ in 0..<4 {
             var out = SPPool()
             let code = sp_pool_prepare(nil, size_t(attempt << 20), &out)
-            if code == SP_JIT_OK, let exec = out.exec, let rw = out.rw, out.size > 0 {
+            if code == Int32(SP_JIT_OK), let exec = out.exec, let rw = out.rw, out.size > 0 {
                 let size = out.size
                 guard !overlapsGuestWindow(exec, size) else {
                     var pool = out
@@ -76,7 +76,7 @@ enum JITPoolAllocator {
                 return JITPool(rx: exec, rw: rw, size: size,
                                noFootprint: out.no_footprint == 1, handle: out)
             }
-            if code == SP_JIT_NO_DEBUGGER {
+            if code == Int32(SP_JIT_NO_DEBUGGER) {
                 lastMessage = String(cString: sp_jit_last_error())
                 break
             }
@@ -88,7 +88,7 @@ enum JITPoolAllocator {
             LogStore.shared.log("[jit] \(attempt * 2) MB pool refused (\(lastMessage)); retrying with \(attempt) MB",
                                 level: .warning)
         }
-        throw JITPoolError.prepare(SP_JIT_ALLOC_FAILED, lastMessage)
+        throw JITPoolError.prepare(Int32(SP_JIT_ALLOC_FAILED), lastMessage)
     }
 
     static func overlapsGuestWindow(_ rx: UnsafeMutableRawPointer, _ size: Int) -> Bool {

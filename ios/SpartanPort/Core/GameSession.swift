@@ -6,7 +6,7 @@ func spartanPortLogHook(_ level: Int32, _ message: UnsafePointer<CChar>?, _ user
     guard let message else { return }
     let text = String(cString: message)
     let logLevel: LogLevel
-    switch level {
+    switch Int(level) {
     case SP_LOG_ERROR: logLevel = .error
     case SP_LOG_WARNING: logLevel = .warning
     default: logLevel = .info
@@ -52,7 +52,7 @@ final class GameSession: ObservableObject {
         lastError = nil
         state = .starting
 
-        var config = sp_session_config(game_dir: nil, app0_dir: nil, user_dir: nil, cpu_only: 0,
+        var config = sp_session_config(game_dir: nil, user_dir: nil, app0_dir: nil, cpu_only: 0,
                                        extra_argc: 0, extra_argv: nil,
                                        jit_rx: nil, jit_rw: nil, jit_size: 0)
         var result: Int32 = -1
