@@ -1,5 +1,5 @@
 import Foundation
-import os.log
+import os
 
 enum LogLevel: String {
     case info

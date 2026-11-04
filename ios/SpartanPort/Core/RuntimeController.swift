@@ -141,7 +141,7 @@ final class RuntimeController: ObservableObject {
                     timer.invalidate()
                     return
                 }
-                if jit_check_debugged() {
+                if self.csDebugged() {
                     timer.invalidate()
                     self.waiter = nil
                     self.debuggerAttached = isDebuggerAttached()
@@ -171,7 +171,7 @@ final class RuntimeController: ObservableObject {
     func preparePool() {
         guard !busy else { return }
         refresh()
-        guard jit_check_debugged() || pool != nil else {
+        guard csDebugged() || pool != nil else {
             fail("Enable JIT first: StikDebug must be attached to answer the pool request.")
             return
         }
@@ -205,7 +205,7 @@ final class RuntimeController: ObservableObject {
     }
 
     func detach() {
-        guard jit_check_debugged() else {
+        guard csDebugged() else {
             LogStore.shared.log("[jit] no debugger session to detach", level: .warning)
             return
         }
@@ -222,6 +222,12 @@ final class RuntimeController: ObservableObject {
                                     level: ok ? .success : .error)
             }
         }
+    }
+
+    /// Reads CS_DEBUGGED without logging, for the 0.5 s poll.
+    private func csDebugged() -> Bool {
+        var flags: UInt32 = 0
+        return jit_cs_status(&flags) && (flags & 0x1000_0000) != 0
     }
 
     private func fail(_ message: String) {

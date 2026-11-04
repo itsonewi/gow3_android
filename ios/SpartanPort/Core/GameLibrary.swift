@@ -1,7 +1,4 @@
 import Foundation
-import SwiftUI
-import UIKit
-import UniformTypeIdentifiers
 
 /// The user's game folder. The runtime needs the folder containing eboot.bin,
 /// sce_module/ and sce_sys/; on iOS it is imported through the Files picker and
@@ -87,37 +84,5 @@ final class GameLibrary: ObservableObject {
     private func stopAccessing() {
         accessing?.stopAccessingSecurityScopedResource()
         accessing = nil
-    }
-}
-
-/// SwiftUI wrapper around the Files folder picker.
-struct FolderPicker: UIViewControllerRepresentable {
-    let onPick: (URL) -> Void
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
-        picker.allowsMultipleSelection = false
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick)
-    }
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let onPick: (URL) -> Void
-
-        init(onPick: @escaping (URL) -> Void) {
-            self.onPick = onPick
-        }
-
-        func documentPicker(_ controller: UIDocumentPickerViewController,
-                            didPickDocumentsAt urls: [URL]) {
-            guard let url = urls.first else { return }
-            onPick(url)
-        }
     }
 }

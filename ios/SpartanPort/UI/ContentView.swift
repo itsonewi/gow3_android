@@ -1,8 +1,10 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var runtime: RuntimeController
     @EnvironmentObject private var library: GameLibrary
+    @ObservedObject private var log = LogStore.shared
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var showFolderPicker = false
@@ -25,12 +27,18 @@ struct ContentView: View {
             }
             .background(background)
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showFolderPicker) {
-                FolderPicker { url in
-                    library.setFolder(url)
-                    showFolderPicker = false
+            .fileImporter(isPresented: $showFolderPicker,
+                          allowedContentTypes: [.folder],
+                          allowsMultipleSelection: false) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        library.setFolder(url)
+                    }
+                case .failure(let error):
+                    LogStore.shared.log("[library] folder picker failed: \(error.localizedDescription)",
+                                        level: .error)
                 }
-                .ignoresSafeArea()
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
@@ -343,7 +351,7 @@ struct ContentView: View {
     private var logCard: some View {
         card(title: "Log", subtitle: "Also written to Console.app") {
             HStack {
-                Text("\(LogStore.shared.entries.count) lines")
+                Text("\(log.entries.count) lines")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -358,8 +366,8 @@ struct ContentView: View {
             if showLog {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 3) {
-                        ForEach(LogStore.shared.entries.suffix(120)) { entry in
-                            Text(LogStore.shared.text(for: entry))
+                        ForEach(log.entries.suffix(120)) { entry in
+                            Text(log.text(for: entry))
                                 .font(.system(size: 9.5, design: .monospaced))
                                 .foregroundStyle(color(for: entry.level))
                                 .frame(maxWidth: .infinity, alignment: .leading)

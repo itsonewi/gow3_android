@@ -21,9 +21,15 @@ concurrency:
 
 jobs:
   build:
-    name: Build unsigned IPA
-    runs-on: macos-15
-    timeout-minutes: 45
+    name: Build unsigned IPA (${{ matrix.os }})
+    # GitHub-hosted macOS capacity is shared across labels; run both an ARM and
+    # an Intel image so whichever pool frees up first produces the IPA.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
 
     steps:
       - name: Checkout
@@ -33,6 +39,7 @@ jobs:
 
       - name: Toolchain
         run: |
+          sw_vers
           xcodebuild -version
           xcode-select -p
           uname -m
@@ -99,7 +106,7 @@ jobs:
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SpartanPort-ipa
+          name: SpartanPort-ipa-${{ matrix.os }}
           path: |
             dist/SpartanPort-unsigned.ipa
             dist/signing/SpartanPort.entitlements
@@ -110,6 +117,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
+          name: build-log-${{ matrix.os }}
           path: ios/build.log
           if-no-files-found: ignore
