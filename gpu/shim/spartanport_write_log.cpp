@@ -9,6 +9,11 @@
 #ifdef _WIN32
 #include <windows.h>
 #undef near
+#elif defined(__APPLE__)
+#include <pthread.h>
+#include <sys/types.h>
+#include <ucontext.h>
+#include <unistd.h>
 #else
 #include <ucontext.h>
 #include <unistd.h>
@@ -62,7 +67,15 @@ void Note(std::uint64_t address, const void* data, std::uint64_t size, Source so
 }
 
 void Record(std::uint64_t address, const void* data, std::uint64_t size, Source source) {
+#if defined(__APPLE__)
+    static thread_local const std::uint32_t tid = [] {
+        std::uint64_t value = 0;
+        pthread_threadid_np(nullptr, &value);
+        return static_cast<std::uint32_t>(value);
+    }();
+#else
     static thread_local const std::uint32_t tid = static_cast<std::uint32_t>(gettid());
+#endif
     Entry e{address, size, 0, Common::FencedRDTSC(), source, tid};
     std::memcpy(&e.first, data, size < 8 ? size : 8);
     Push(ring, head, e);

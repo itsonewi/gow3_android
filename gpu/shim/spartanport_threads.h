@@ -10,6 +10,9 @@
 #ifdef _WIN32
 #include <bit>
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <sys/resource.h>
+#include <unistd.h>
 #else
 #include <sched.h>
 #include <sys/resource.h>
@@ -30,6 +33,17 @@ inline unsigned Available() {
 /// The calling thread only runs when cores are otherwise idle (lowest Windows priority).
 inline void MakeBackground() {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
+}
+#elif defined(__APPLE__)
+/// iOS exposes no affinity mask; the active processor count is the equivalent.
+inline unsigned Available() {
+    return std::max(1u, std::thread::hardware_concurrency());
+}
+
+/// PRIO_DARWIN_BG is the iOS equivalent of SCHED_IDLE: the thread only runs on
+/// otherwise idle cores.
+inline void MakeBackground() {
+    setpriority(PRIO_DARWIN_THREAD, 0, PRIO_DARWIN_BG);
 }
 #else
 
