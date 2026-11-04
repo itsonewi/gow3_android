@@ -144,7 +144,24 @@ static ABI int32_t mutex_timedlock(GuestMutex **mutex, uint32_t usec) {
     if (deadline_after(&end, usec)) return orbis_error(EINVAL);
     GuestMutex *value=*mutex;
     __atomic_add_fetch(&value->users,1,__ATOMIC_ACQ_REL);
+#if defined(__APPLE__)
+    /* Darwin does not declare pthread_mutex_timedlock; poll the try-lock and
+     * give up at the PS4 deadline (1 ms granularity). */
+    int host = EBUSY;
+    for (;;) {
+        host = pthread_mutex_trylock(&value->native);
+        if (host != EBUSY) break;
+        struct timespec now;
+        clock_gettime(CLOCK_REALTIME, &now);
+        if (now.tv_sec > end.tv_sec ||
+            (now.tv_sec == end.tv_sec && now.tv_nsec >= end.tv_nsec)) { host = ETIMEDOUT; break; }
+        const struct timespec nap = {0, 1000000};
+        nanosleep(&nap, NULL);
+    }
+    e = timed_error(host);
+#else
     e = timed_error(pthread_mutex_timedlock(&value->native, &end));
+#endif
     if (e) __atomic_sub_fetch(&value->users,1,__ATOMIC_RELEASE);
     if (!e) ++locks;
     return e;

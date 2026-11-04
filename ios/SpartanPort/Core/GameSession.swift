@@ -52,7 +52,9 @@ final class GameSession: ObservableObject {
         lastError = nil
         state = .starting
 
-        var config = sp_session_config()
+        var config = sp_session_config(game_dir: nil, app0_dir: nil, user_dir: nil, cpu_only: 0,
+                                       extra_argc: 0, extra_argv: nil,
+                                       jit_rx: nil, jit_rw: nil, jit_size: 0)
         var result: Int32 = -1
 
         // sp_session_start only reads these strings during the call.
