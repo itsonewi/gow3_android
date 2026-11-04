@@ -12,7 +12,12 @@ jobs:
       - run: uname -a
       - run: echo linux-ok
   mac:
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15, macos-26, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - run: sw_vers
       - run: echo mac-ok
