@@ -142,6 +142,9 @@ GuestThread *Current() {
     mprotect(t->thread->CallRetStackBase, InternalThreadState::CALLRET_STACK_SIZE, PROT_READ | PROT_WRITE);
     auto &s = frame->State;
     s.callret_sp = DefaultCallRet(t);
+    // ios-port-2607 mirrors CallRetStackBase here; the JIT's inline guard and
+    // the debug paths compare callret_sp against it.
+    s.callret_sp_base = reinterpret_cast<uint64_t>(t->thread->CallRetStackBase);
     s.segment_arrays[CPUState::SEGMENT_ARRAY_INDEX_GDT] = s.private_gdt;
     s.segment_arrays[CPUState::SEGMENT_ARRAY_INDEX_LDT] = s.private_gdt;
     s.cs_idx = CPUState::DEFAULT_USER_CS << 3;
@@ -321,7 +324,12 @@ extern "C" {
 void gport_guest_cpu_init(void *(*map)(size_t size, int prot)) {
     low_map = map;
     FEXCore::Allocator::free(FEXCore::Allocator::malloc(64));
+#if !defined(__APPLE__)
+    // The 64-bit allocator (and this entry point) is not built on Apple: the
+    // guest lives in our own windows and FEX's code buffers come from the
+    // StikDebug pool through the mmap interposer.
     FEXCore::Allocator::Setup48BitAllocatorIfExists(sysconf(_SC_PAGESIZE));
+#endif
     std::atexit(FEXCore::Allocator::ClearHooks);
     LogMan::Throw::InstallHandler(LogAssert);
     LogMan::Msg::InstallHandler(LogMessage);

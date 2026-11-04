@@ -68,6 +68,7 @@ targets:
           - "$(SRCROOT)/../third_party/FEX/FEXCore/Source/Interface/Config"
           - "$(SRCROOT)/../third_party/FEX/Source"
           - "$(SRCROOT)/../third_party/FEX/build-ios/generated"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/include"
           - "$(SRCROOT)/../third_party/FEX/External/fmt/include"
           - "$(SRCROOT)/../third_party/FEX/build-ios/External/fmt/include"
           - "$(SRCROOT)/../third_party/FEX/External/range-v3/include"
