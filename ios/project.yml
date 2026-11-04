@@ -156,9 +156,9 @@ targets:
           - "SPARTANPORT_RUNTIME=1"
           - "SPARTANPORT_GPU=1"
         OTHER_LDFLAGS: >-
-          $(inherited) -lFEXCore -lFEXCore_Base -lJemallocLibs
-          -lfmt -lcephes_128bit -lsoftfloat_3e -lxxhash
-          -lspartanportgpu-all -lSpartanRuntime -lc++ -lz -lxpc
+          $(inherited) -lspartanportgpu-all -lSpartanRuntime
+          -lFEXCore -lFEXCore_Base -lJemallocLibs
+          -lfmt -lcephes_128bit -lsoftfloat_3e -lxxhash -lc++ -lz -lxpc
           -Wl,-framework,Metal -Wl,-framework,QuartzCore -Wl,-framework,UIKit
           -Wl,-framework,Foundation -Wl,-framework,CoreGraphics
           -Wl,-framework,IOSurface -Wl,-framework,CoreVideo

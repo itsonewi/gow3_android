@@ -118,8 +118,6 @@ LIBS=(
     "$GPU_LIB"
     "$PREFIX/lib/libSDL3.a"
     "$PREFIX/lib/libZydis.a"
-    "$FEX_IOS/External/fmt/libfmt.a"
-    "$FEX_IOS/External/xxhash/cmake_unofficial/libxxhash.a"
     "$MOLTEN/lib/libvulkan.a"
 )
 for lib in $(find "$OUT" -name 'libminiz.a' -o -name 'libsirit.a'); do
