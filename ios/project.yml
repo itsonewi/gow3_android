@@ -26,24 +26,38 @@ targets:
     sources:
       - path: Runtime
       - path: ../src/runtime.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_kernel.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_memory.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_mutex.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_rwlock.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_sema.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_thread.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_time.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_file.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_services.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_savedata.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_content.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_rtc.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
     settings:
       base:
         PRODUCT_NAME: SpartanRuntime
-        # sp_compat.h supplies memfd_create, gettid, fallocate, mallopt and the
-        # other Linux-only names the stock runtime uses (see the header).
-        OTHER_CFLAGS: "$(inherited) -include \"$(SRCROOT)/Runtime/platform/sp_compat.h\""
+        # sp_compat.h is applied per source file: a target-wide -include also
+        # reaches host_call_arm64_ios.S, whose assembler then tries to parse
+        # <unistd.h> and fails.
+        OTHER_CFLAGS: "$(inherited)"
         OTHER_CPLUSPLUSFLAGS: "$(inherited)"
         HEADER_SEARCH_PATHS:
           - "$(SRCROOT)/Runtime/include"

@@ -58,12 +58,14 @@ class ProjectTests(unittest.TestCase):
         self.assertNotIn("-image_base", flags)
 
     def test_runtime_target_uses_the_compat_header(self):
+        sources = self.targets["SpartanRuntime"]["sources"]
+        shimmed = [s for s in sources if isinstance(s, dict) and "sp_compat.h" in s.get("compilerFlags", "")]
+        # Every stock runtime C file gets the Linux-name shims, but not the .S
+        # file: a target-wide -include made the assembler parse <unistd.h>.
+        self.assertGreaterEqual(len(shimmed), 13)
         base = self.targets["SpartanRuntime"]["settings"]["base"]
-        # C sources get the Linux-name shims. The C++ FEX glue deliberately does
-        # not: a `gettid`/`memfd_create` macro would rewrite names inside FEX's
-        # own headers, so it includes spartanport_ios.h instead.
-        self.assertIn("sp_compat.h", base["OTHER_CFLAGS"])
-        self.assertNotIn("sp_compat.h", base["OTHER_CPLUSPLUSFLAGS"])
+        self.assertNotIn("-include", base["OTHER_CFLAGS"])
+        self.assertNotIn("-include", base["OTHER_CPLUSPLUSFLAGS"])
 
     def test_runtime_target_builds_the_stock_loader_and_hle(self):
         sources = self.targets["SpartanRuntime"]["sources"]
