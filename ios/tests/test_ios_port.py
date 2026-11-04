@@ -191,6 +191,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(IOS, "scripts", "build-gpu-ios.sh")))
         self.assertTrue(os.path.exists(os.path.join(ROOT, "gpu", "README-ios.md")))
 
+    def test_gpu_cmake_branch(self):
+        cmake = open(os.path.join(ROOT, "gpu", "CMakeLists.txt"), encoding="utf-8").read()
+        for marker in ("SPARTAN_IOS", "window_ios.mm", "fsr_stub.cpp", "ios_stub.cpp",
+                       "SPARTAN_XXHASH", "return()"):
+            self.assertIn(marker, cmake)
+        script = read("scripts", "build-gpu-ios.sh")
+        self.assertIn("SPARTAN_IOS=ON", script)
+        self.assertIn("libtool -static", script)
+        self.assertIn("libspartanportgpu-all.a", script)
+
     def test_guest_window_contract(self):
         platform = read("Runtime", "platform", "sp_platform.c")
         self.assertIn("SP_PS4_USER_MIN", platform)
