@@ -81,7 +81,9 @@ if [[ ! -f "$MOLTEN/lib/libvulkan.a" ]]; then
     fi
     tar -xf "$DEPS/MoltenVK-ios.tar" -C "$MOLTEN"
     mkdir -p "$MOLTEN/lib"
-    ln -sf "$(find "$MOLTEN" -path '*ios-arm64/libMoltenVK.a' -print -quit)" "$MOLTEN/lib/libvulkan.a"
+    MOLTEN_LIB="$(find "$MOLTEN" -path '*ios-arm64/libMoltenVK.a' -print -quit)"
+    [[ -n "$MOLTEN_LIB" ]] || { echo "MoltenVK ios-arm64 static library not found in the tar" >&2; exit 1; }
+    ln -sf "$MOLTEN_LIB" "$MOLTEN/lib/libvulkan.a"
 fi
 if [[ ! -f "$MOLTEN/include/vulkan/vulkan.h" ]]; then
     VK="$DEPS/Vulkan-Headers"
@@ -116,6 +118,9 @@ cmake -S "$ROOT/gpu" -B "$OUT" -G Ninja \
     -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 \
     -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DVULKAN_SDK="$MOLTEN" \
+    -DVulkan_INCLUDE_DIR="$MOLTEN/include" \
+    -DVulkan_LIBRARY="$MOLTEN/lib/libvulkan.a" \
     -DSPARTAN_IOS=ON -DSPARTAN_LTO=OFF -DSPARTAN_PGO=off \
     -DSPARTAN_TSL_INCLUDE="$PREFIX/include" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX"

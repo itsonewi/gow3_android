@@ -36,6 +36,18 @@ jobs:
           glslang --version || brew install glslang
           brew install boost xcodegen
 
+      - name: Cache FEX iOS libraries
+        uses: actions/cache@v4
+        with:
+          path: third_party/FEX/build-ios
+          key: fex-ios-${{ runner.os }}-${{ hashFiles('third_party/FEX/FEXCore/include/FEXCore/Core/HostFeatures.h') }}-v1
+
+      - name: Cache iOS GPU dependencies
+        uses: actions/cache@v4
+        with:
+          path: ios/.build
+          key: ios-gpu-deps-v1
+
       - name: Build renderer + app
         run: |
           set -o pipefail
