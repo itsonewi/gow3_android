@@ -19,6 +19,15 @@
 #define SPARTANPORT_IOS_COMPAT_H
 
 #if defined(__APPLE__)
+/* probe.c includes <ucontext.h> for the signal frame; the iOS SDK hides the
+ * deprecated ucontext API behind _XOPEN_SOURCE. This header is the first
+ * include of every stock C file, so the feature macro is early enough. */
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
+#endif
+
+#if defined(__APPLE__)
 
 #include <Availability.h>
 #include <TargetConditionals.h>
