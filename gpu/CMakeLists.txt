@@ -83,7 +83,15 @@ else()
     find_package(fmt REQUIRED)
     set(SPARTAN_XXHASH PkgConfig::XXHASH)
 endif()
-find_package(Boost REQUIRED)
+if (SPARTAN_IOS)
+    # Header-only Boost from Homebrew; find_package(Boost) insists on an
+    # include directory layout the iOS toolchain search does not reach.
+    add_library(spartan_boost INTERFACE)
+    add_library(Boost::headers ALIAS spartan_boost)
+    target_include_directories(spartan_boost INTERFACE "${SPARTAN_BOOST_INCLUDE}")
+else()
+    find_package(Boost REQUIRED)
+endif()
 # spartanport (Windows): MSYS2 has no magic_enum/miniz packages; the submodules are used instead.
 find_package(magic_enum QUIET)
 if (NOT magic_enum_FOUND)
