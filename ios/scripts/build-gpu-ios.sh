@@ -68,7 +68,7 @@ cmake -S "$ZY_SRC" -B "$DEPS/zydis-build" -G Ninja \
     -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DZYDIS_BUILD_TOOLS=OFF -DZYDIS_BUILD_EXAMPLES=OFF -DZYDIS_BUILD_DOXYGEN=OFF \
-    -DZYDIS_BUILD_MAN=OFF
+    -DZYDIS_BUILD_MAN=OFF -DZYDIS_BUILD_SHARED_LIB=OFF
 cmake --build "$DEPS/zydis-build" --parallel "$JOBS" --target install
 
 # --- MoltenVK + Vulkan headers ---------------------------------------------
@@ -100,6 +100,7 @@ fi
 # --- GPU library -----------------------------------------------------------
 export VULKAN_SDK="$MOLTEN"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
+export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 export CMAKE_PREFIX_PATH="$PREFIX;$MOLTEN"
 
 cmake -S "$ROOT/gpu" -B "$OUT" -G Ninja \
