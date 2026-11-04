@@ -107,7 +107,6 @@ std::atomic<size_t> hook_count;
 std::shared_mutex code_lock;
 std::vector<std::pair<uintptr_t, size_t>> code_ranges;
 
-constexpr size_t CallRetAlloc = InternalThreadState::CALLRET_STACK_SIZE + 2 * FEXCore::Utils::FEX_PAGE_SIZE;
 constexpr size_t DefaultStack = 1024 * 1024;
 constexpr size_t StackHeadroom = 256;
 constexpr unsigned HostStackSlots = 10;
@@ -115,6 +114,7 @@ constexpr unsigned HostStackSlots = 10;
 struct GuestThread {
     InternalThreadState *thread;
     uintptr_t callret_alloc;
+    size_t callret_size;
     uintptr_t stack_top;
     unsigned depth;
 };
@@ -135,10 +135,15 @@ GuestThread *Current() {
     auto *t = new GuestThread{};
     t->thread = ctx->CreateThread(0, 0, nullptr);
     auto *frame = t->thread->CurrentFrame;
-    void *alloc = mmap(nullptr, CallRetAlloc, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    // iOS host pages are 16 KB: the guard offset must be one host page, not
+    // FEX_PAGE_SIZE (the guest's 4 KB).
+    const size_t page = (size_t)sysconf(_SC_PAGESIZE);
+    const size_t alloc_size = InternalThreadState::CALLRET_STACK_SIZE + 2 * page;
+    void *alloc = mmap(nullptr, alloc_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (alloc == MAP_FAILED) Fatal("cannot allocate the call-return stack");
     t->callret_alloc = reinterpret_cast<uintptr_t>(alloc);
-    t->thread->CallRetStackBase = static_cast<char *>(alloc) + FEXCore::Utils::FEX_PAGE_SIZE;
+    t->callret_size = alloc_size;
+    t->thread->CallRetStackBase = static_cast<char *>(alloc) + page;
     mprotect(t->thread->CallRetStackBase, InternalThreadState::CALLRET_STACK_SIZE, PROT_READ | PROT_WRITE);
     auto &s = frame->State;
     s.callret_sp = DefaultCallRet(t);
@@ -437,7 +442,7 @@ void gport_guest_cpu_thread_end(void) {
     }
     self = nullptr;
     ctx->DestroyThread(t->thread);
-    munmap(reinterpret_cast<void *>(t->callret_alloc), CallRetAlloc);
+    munmap(reinterpret_cast<void *>(t->callret_alloc), t->callret_size);
     delete t;
 }
 
@@ -490,7 +495,7 @@ int gport_guest_cpu_handle_fault(int sig, siginfo_t *info, void *ucontext) {
     const auto address = reinterpret_cast<uintptr_t>(info->si_addr);
     InternalThreadState *thread = t->thread;
     if (sig == SIGSEGV) {
-        if (address - t->callret_alloc < CallRetAlloc) {
+        if (address - t->callret_alloc < t->callret_size) {
             m.__ss.__x[25] = DefaultCallRet(t);
             return 1;
         }
