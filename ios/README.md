@@ -87,6 +87,18 @@ xcodebuild -project SpartanPort.xcodeproj -scheme SpartanPort \
 The app target links `SpartanRuntime` (the stock loader and HLE plus the iOS
 shims) and the FEXCore archives from `third_party/FEX/build-ios`.
 
+### The GPU app
+
+`ios/scripts/build-gpu-ios.sh` builds the shadPS4 renderer for iOS (Metal through
+MoltenVK), combines it with SDL3/Zydis/fmt/xxhash/MoltenVK into
+`out/gpu-ios/libspartanportgpu-all.a`, and `--app` builds the `SpartanPortGPU`
+scheme. That target defines `SPARTANPORT_GPU`, links the archive, and starts the
+loader without `--cpu-only`, so the real `spartanportgpu_*` symbols (which
+override the weak stubs) create the CAMetalLayer and the Vulkan device. See
+[`gpu/README-ios.md`](../gpu/README-ios.md) for the dependency recipe and what
+still has to be validated on a device; this build has not been run on a Mac from
+this checkout yet.
+
 ## Installing and preparing the game
 
 The artifact is unsigned. Install it with SideStore, AltStore, Sideloadly,

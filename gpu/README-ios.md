@@ -103,18 +103,19 @@ The MoltenVK tar layout differs between releases; the only requirement is
 
 ## Wiring the app
 
-Once `libspartanportgpu.a` exists:
+The `SpartanPortGPU` target in `ios/project.yml` is already wired:
 
-1. Add it to the app link (`LIBRARY_SEARCH_PATHS` + `-lspartanportgpu`) and
-   define `SPARTANPORT_GPU=1`.
-2. In `RuntimeController.play`, pass `cpuOnly: false` so the loader calls
-   `spartanportgpu_init` instead of skipping it.
-3. Remove `Runtime/gpu/sp_gpu_stub.c` from the runtime target (or keep it out
-   of the app build) so the real symbols win.
-4. `shim/window_ios.mm` needs `-fobjc-arc` (already set by the CMake branch).
-
-The session then starts FEX, loads the guest, creates the CAMetalLayer and
-Vulkan device, and the presenter runs the same swapchain code as Android.
+1. `SPARTAN_IOS` CMake builds the renderer; `build-gpu-ios.sh` combines it and
+   every static dependency into `out/gpu-ios/libspartanportgpu-all.a`.
+2. `SpartanPortGPU` links that archive, defines `SPARTANPORT_GPU`, and links the
+   Apple frameworks MoltenVK/SDL3 need.
+3. The GPU stub in `Runtime/gpu/sp_gpu_stub.c` is `__attribute__((weak))`, so
+   the real `spartanportgpu_*` symbols override it without a second runtime
+   target.
+4. `RuntimeController.play` compiles `cpu_only = false` for the GPU target, so
+   the loader calls `spartanportgpu_init` instead of skipping it.
+5. `window_ios.mm` creates the CAMetalLayer; the renderer presents through the
+   normal VideoOut swapchain.
 
 ## What still has to be validated on a device
 
@@ -139,4 +140,6 @@ Vulkan device, and the presenter runs the same swapchain code as Android.
 | FSR stub | written |
 | FFmpeg PNG/trophy stubs | written |
 | `SPARTAN_IOS` CMake branch | written, **not yet built on macOS** |
-| App link + GPU play path | next |
+| `build-gpu-ios.sh` (SDL3, Zydis, MoltenVK, libtool archive) | written, **not yet run** |
+| `SpartanPortGPU` app target | written |
+| First device run / feature validation | to do |

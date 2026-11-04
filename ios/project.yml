@@ -117,6 +117,69 @@ targets:
         "-SPDebug": false
 
   # ---------------------------------------------------------------------------
+  # The GPU variant: same app, linked against shadPS4 + MoltenVK.
+  #
+  # Build it only after ios/scripts/build-gpu-ios.sh produced
+  # out/gpu-ios/libspartanportgpu-all.a (the GPU library and every static
+  # dependency combined with libtool). The weak stubs in Runtime/gpu are then
+  # overridden by the real spartanportgpu_* symbols, and Play passes
+  # cpu_only = 0 so the loader creates the Metal surface and the Vulkan device.
+  # ---------------------------------------------------------------------------
+  SpartanPortGPU:
+    type: application
+    platform: iOS
+    sources:
+      - path: SpartanPort
+        excludes:
+          - "Resources/Info.plist"
+          - "Resources/SpartanPort.entitlements"
+    dependencies:
+      - target: SpartanRuntime
+      - target: SpartanPortMemoryHost
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport.gpu
+        PRODUCT_NAME: SpartanPortGPU
+        INFOPLIST_FILE: SpartanPort/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SpartanPort/Resources/SpartanPort.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: SpartanPort/Native/SpartanPort-Bridging-Header.h
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_BITCODE: NO
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SPARTANPORT_GPU"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Runtime/include"
+          - "$(SRCROOT)/Shared"
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - "SPARTANPORT_RUNTIME=1"
+          - "SPARTANPORT_GPU=1"
+        OTHER_LDFLAGS: >-
+          $(inherited) -lFEXCore -lFEXCore_Base -lJemallocLibs
+          -lfmt -lcephes_128bit -lsoftfloat_3e -lxxhash
+          -lspartanportgpu-all -lc++ -lz -lxpc
+          -Wl,-framework,Metal -Wl,-framework,QuartzCore -Wl,-framework,UIKit
+          -Wl,-framework,Foundation -Wl,-framework,CoreGraphics
+          -Wl,-framework,IOSurface -Wl,-framework,CoreVideo
+          -Wl,-framework,AVFoundation -Wl,-framework,AudioToolbox
+          -Wl,-framework,CoreAudio -Wl,-framework,GameController
+          -Wl,-framework,CoreHaptics -Wl,-framework,CoreMotion
+          -Wl,-framework,CoreBluetooth
+        LIBRARY_SEARCH_PATHS:
+          - "$(SRCROOT)/../out/gpu-ios"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/FEXCore/Source"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/fmt"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/cephes"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/SoftFloat-3e"
+          - "$(SRCROOT)/../third_party/FEX/build-ios/External/xxhash/cmake_unofficial"
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+    scheme:
+      gatherCoverageData: false
+
+  # ---------------------------------------------------------------------------
   # Memory+: the extension on com.apple.ar.viewer that iOS 27's jetsam table
   # leaves without a memory limit. Same experiment as Madeira's
   # MadeiraMemoryHost: it creates memory objects for the app on request.

@@ -1,0 +1,69 @@
+name: Build iOS GPU app
+
+# Manual only: the GPU build pulls MoltenVK, SDL3, Zydis and FEX and compiles the
+# shadPS4 renderer for iOS. It is the iterative build for the Metal path; the
+# normal "Build iOS IPA" workflow stays on the CPU-only app.
+on:
+  workflow_dispatch:
+    inputs:
+      build_app:
+        description: "Also build the SpartanPortGPU app and package the IPA"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-gpu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gpu:
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          sw_vers
+          cmake --version || brew install cmake
+          ninja --version || brew install ninja
+          glslang --version || brew install glslang
+          brew install boost tsl-robin-map xcodegen
+
+      - name: Build renderer + app
+        run: |
+          set -o pipefail
+          if [[ "${{ inputs.build_app }}" == "true" ]]; then
+            bash ios/scripts/build-gpu-ios.sh --app | tee gpu-build.log
+          else
+            bash ios/scripts/build-gpu-ios.sh | tee gpu-build.log
+          fi
+
+      - name: Package IPA
+        if: inputs.build_app
+        run: |
+          set -euo pipefail
+          APP="ios/build-gpu/Build/Products/Release-iphoneos/SpartanPortGPU.app"
+          test -d "$APP"
+          rm -rf dist-gpu
+          mkdir -p dist-gpu/Payload
+          cp -R "$APP" dist-gpu/Payload/
+          cd dist-gpu && zip -qry SpartanPortGPU-unsigned.ipa Payload
+          ls -lh SpartanPortGPU-unsigned.ipa
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spartanport-ios-gpu
+          path: |
+            out/gpu-ios/libspartanportgpu-all.a
+            gpu-build.log
+            dist-gpu/SpartanPortGPU-unsigned.ipa
+          if-no-files-found: warn

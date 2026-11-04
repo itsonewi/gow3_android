@@ -260,8 +260,17 @@ final class RuntimeController: ObservableObject {
             return
         }
         guard let userDir = Self.userDirectory() else { return }
+#if SPARTANPORT_GPU
+        // The GPU build (SpartanPortGPU target) links shadPS4 + MoltenVK; the
+        // weak stubs in Runtime/gpu are overridden, so the loader may create the
+        // Metal surface and the Vulkan device.
+        _ = cpuOnly
+        session.start(gameDirectory: prepared, app0: game.dumpFolder, userDirectory: userDir,
+                      pool: pool, cpuOnly: false)
+#else
         session.start(gameDirectory: prepared, app0: game.dumpFolder, userDirectory: userDir,
                       pool: pool, cpuOnly: cpuOnly)
+#endif
     }
 
     func stop() {

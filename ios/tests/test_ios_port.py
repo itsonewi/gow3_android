@@ -38,8 +38,18 @@ class ProjectTests(unittest.TestCase):
 
     def test_targets_exist(self):
         self.assertIn("SpartanPort", self.targets)
+        self.assertIn("SpartanPortGPU", self.targets)
         self.assertIn("SpartanRuntime", self.targets)
         self.assertIn("SpartanPortMemoryHost", self.targets)
+
+    def test_gpu_target_links_the_renderer(self):
+        flags = self.targets["SpartanPortGPU"]["settings"]["base"]["OTHER_LDFLAGS"]
+        self.assertIn("-lspartanportgpu-all", flags)
+        conditions = self.targets["SpartanPortGPU"]["settings"]["base"][
+            "SWIFT_ACTIVE_COMPILATION_CONDITIONS"]
+        self.assertIn("SPARTANPORT_GPU", conditions)
+        # The CPU target must not link the renderer.
+        self.assertNotIn("-lspartanportgpu", self.targets["SpartanPort"]["settings"]["base"]["OTHER_LDFLAGS"])
 
     def test_app_keeps_the_default_image_base(self):
         # The guest range starts at 64 GiB; the app image at 0x100000000 does
@@ -173,6 +183,13 @@ class RuntimeTests(unittest.TestCase):
     def test_cpu_only_is_honest_about_the_gpu(self):
         stub = read("Runtime", "gpu", "sp_gpu_stub.c")
         self.assertIn("not part of the CPU-only bring-up", stub)
+        # Weak stubs let the GPU app target override them with the real library.
+        self.assertIn("SP_WEAK", stub)
+        self.assertIn("__attribute__((weak))", stub)
+
+    def test_gpu_build_script_exists(self):
+        self.assertTrue(os.path.exists(os.path.join(IOS, "scripts", "build-gpu-ios.sh")))
+        self.assertTrue(os.path.exists(os.path.join(ROOT, "gpu", "README-ios.md")))
 
     def test_guest_window_contract(self):
         platform = read("Runtime", "platform", "sp_platform.c")
