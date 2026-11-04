@@ -112,7 +112,8 @@ fi
 export VULKAN_SDK="$MOLTEN"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
-export CMAKE_PREFIX_PATH="$PREFIX;$MOLTEN"
+BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+export CMAKE_PREFIX_PATH="$PREFIX;$MOLTEN${BREW_PREFIX:+;$BREW_PREFIX}"
 
 cmake -S "$ROOT/gpu" -B "$OUT" -G Ninja \
     -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 \
@@ -121,6 +122,7 @@ cmake -S "$ROOT/gpu" -B "$OUT" -G Ninja \
     -DVULKAN_SDK="$MOLTEN" \
     -DVulkan_INCLUDE_DIR="$MOLTEN/include" \
     -DVulkan_LIBRARY="$MOLTEN/lib/libvulkan.a" \
+    -DBOOST_ROOT="$BREW_PREFIX/opt/boost" \
     -DSPARTAN_IOS=ON -DSPARTAN_LTO=OFF -DSPARTAN_PGO=off \
     -DSPARTAN_TSL_INCLUDE="$PREFIX/include" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX"
