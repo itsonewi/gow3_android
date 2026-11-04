@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <limits.h>
+#include <time.h>
 typedef struct Holder {
     pthread_t thread;
     unsigned readers, writer, pending;
@@ -107,7 +108,22 @@ static int32_t acquire(Rwlock **handle, enum Operation op, const GuestTime *time
         if (!time || time->nanoseconds<0 || time->nanoseconds>=1000000000) e=EINVAL;
         else {
             struct timespec deadline={.tv_sec=(time_t)time->seconds,.tv_nsec=(long)time->nanoseconds};
+#if defined(__APPLE__)
+            /* Darwin has no pthread_rwlock_timed*lock; poll the try-lock and
+             * give up at the deadline (1 ms granularity, the PS4's own clock). */
+            for (;;) {
+                struct timespec now;
+                clock_gettime(CLOCK_REALTIME,&now);
+                if (now.tv_sec>deadline.tv_sec ||
+                    (now.tv_sec==deadline.tv_sec && now.tv_nsec>=deadline.tv_nsec)) { e=ETIMEDOUT; break; }
+                e=writer ? pthread_rwlock_trywrlock(&r->native) : pthread_rwlock_tryrdlock(&r->native);
+                if (e!=EBUSY) break;
+                const struct timespec nap={0,1000000};
+                nanosleep(&nap,NULL);
+            }
+#else
             e=writer ? pthread_rwlock_timedwrlock(&r->native,&deadline) : pthread_rwlock_timedrdlock(&r->native,&deadline);
+#endif
         }
     }
     pthread_mutex_lock(&registry_lock);
