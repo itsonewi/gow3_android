@@ -116,7 +116,7 @@ targets:
           - "SPARTANPORT_RUNTIME=1"
         OTHER_LDFLAGS: >-
           $(inherited) -lFEXCore -lFEXCore_Base -lJemallocLibs
-          -lfmt -lcephes_128bit -lsoftfloat_3e -lxxhash -lc++ -lz -lxpc
+          -lfmt -lcephes_128bit -lsoftfloat_3e -lxxhash -lc++ -lz
         LIBRARY_SEARCH_PATHS:
           - "$(SRCROOT)/../third_party/FEX/build-ios/FEXCore/Source"
           - "$(SRCROOT)/../third_party/FEX/build-ios/External/fmt"
@@ -173,7 +173,7 @@ targets:
         OTHER_LDFLAGS: >-
           $(inherited) -lspartanportgpu-all -lSpartanRuntime
           -lFEXCore -lFEXCore_Base -lJemallocLibs
-          -lfmt -lcephes_128bit -lsoftfloat_3e -lxxhash -lc++ -lz -lxpc
+          -lfmt -lcephes_128bit -lsoftfloat_3e -lxxhash -lc++ -lz
           -Wl,-framework,Metal -Wl,-framework,QuartzCore -Wl,-framework,UIKit
           -Wl,-framework,Foundation -Wl,-framework,CoreGraphics
           -Wl,-framework,IOSurface -Wl,-framework,CoreVideo
@@ -214,6 +214,6 @@ targets:
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1,2"
         CLANG_ENABLE_OBJC_ARC: YES
-        OTHER_LDFLAGS: "$(inherited) -lxpc"
+        OTHER_LDFLAGS: "$(inherited)"
         HEADER_SEARCH_PATHS:
           - "$(SRCROOT)/Shared"
