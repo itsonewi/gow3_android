@@ -1,0 +1,6 @@
+#ifndef SPARTANPORT_BRIDGING_HEADER_H
+#define SPARTANPORT_BRIDGING_HEADER_H
+
+#import "JITAllocator.h"
+
+#endif

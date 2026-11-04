@@ -1,0 +1,115 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [arm, main, ios]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcode-select -p
+          uname -m
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build app
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project SpartanPort.xcodeproj \
+            -scheme SpartanPort \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build | tee build.log
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP="ios/build/Build/Products/Release-iphoneos/SpartanPort.app"
+          test -d "$APP"
+          rm -rf dist
+          mkdir -p dist/Payload dist/signing
+          cp -R "$APP" dist/Payload/
+          cp ios/SpartanPort/Resources/SpartanPort.entitlements dist/signing/
+          cat > dist/signing/README.txt <<'EOF'
+          SpartanPort iOS - unsigned build
+
+          The IPA in this artifact is unsigned. Install it with the sideloading
+          tool you normally use (SideStore, AltStore, Sideloadly, ESign, ...).
+
+          For the runtime to work, that tool must sign the app with these
+          entitlements (dist/signing/SpartanPort.entitlements):
+            com.apple.developer.kernel.increased-memory-limit   (Memory+)
+            com.apple.developer.kernel.extended-virtual-addressing (64 GB map)
+            get-task-allow                                      (StikDebug / JIT)
+            com.apple.security.cs.allow-jit
+
+          A free/standard development profile normally carries get-task-allow
+          but may not carry the two kernel entitlements. If Settings shows
+          Memory+ or Extended VA as missing, the signature - not this build -
+          is what needs changing.
+          EOF
+          cd dist
+          zip -qry SpartanPort-unsigned.ipa Payload
+          ls -lh SpartanPort-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpartanPort-ipa
+          path: |
+            dist/SpartanPort-unsigned.ipa
+            dist/signing/SpartanPort.entitlements
+            dist/signing/README.txt
+          if-no-files-found: error
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: ios/build.log
+          if-no-files-found: ignore
