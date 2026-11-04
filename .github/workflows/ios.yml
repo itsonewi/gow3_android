@@ -80,7 +80,7 @@ jobs:
       - name: Fetch FEX (Madeira's iOS fork)
         run: bash ios/scripts/fetch-fex.sh
         env:
-          FEX_REF: main
+          FEX_REF: ios-port-2607
 
       - name: Cache FEX iOS libraries
         uses: actions/cache@v4

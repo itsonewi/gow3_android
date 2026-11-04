@@ -11,10 +11,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FEX_DIR="$ROOT/third_party/FEX"
 FEX_URL="${FEX_URL:-https://github.com/willfaust/FEX.git}"
-FEX_REF="${FEX_REF:-main}"
+# Madeira builds the iOS branch, not main: ios-port-2607 carries the Apple
+# platform support (16 KB host pages, SMC traps, iOS in CMakeLists).
+FEX_REF="${FEX_REF:-ios-port-2607}"
 
 if [[ -d "$FEX_DIR/.git" ]] && git -C "$FEX_DIR" remote get-url origin 2>/dev/null | grep -q 'willfaust/FEX'; then
-    echo "FEX fork already present at $FEX_DIR"
+    echo "FEX fork already present at $FEX_DIR; checking out $FEX_REF"
+    git -C "$FEX_DIR" fetch --depth 1 origin "$FEX_REF"
+    git -C "$FEX_DIR" checkout -q -f FETCH_HEAD
 else
     rm -rf "$FEX_DIR"
     mkdir -p "$(dirname "$FEX_DIR")"
