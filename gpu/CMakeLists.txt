@@ -92,7 +92,15 @@ if (NOT magic_enum_FOUND)
     target_include_directories(magic_enum INTERFACE third_party/magic_enum/include
                                                     third_party/magic_enum/include/magic_enum)
 endif()
-find_package(tsl-robin-map REQUIRED)
+if (SPARTAN_IOS)
+    # Header-only; Homebrew has no tsl-robin-map formula, so build-gpu-ios.sh
+    # downloads include/tsl into the prefix.
+    add_library(spartan_robin_map INTERFACE)
+    add_library(tsl::robin_map ALIAS spartan_robin_map)
+    target_include_directories(spartan_robin_map INTERFACE "${SPARTAN_TSL_INCLUDE}")
+else()
+    find_package(tsl-robin-map REQUIRED)
+endif()
 find_package(VulkanMemoryAllocator CONFIG QUIET)
 if (NOT VulkanMemoryAllocator_FOUND)
     # MSYS2 ships the header (include/vma/vk_mem_alloc.h) without a CMake package.

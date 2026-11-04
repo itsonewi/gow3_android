@@ -97,6 +97,15 @@ if [[ ! -f "$PREFIX/include/vma/vk_mem_alloc.h" ]]; then
         https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/master/include/vk_mem_alloc.h
 fi
 
+# tsl::robin_map is header-only and has no Homebrew formula; the renderer uses it.
+if [[ ! -d "$PREFIX/include/tsl" ]]; then
+    curl -L -o "$DEPS/robin-map.tar.gz" \
+        https://github.com/Tessil/robin-map/archive/refs/tags/v1.3.0.tar.gz
+    tar -xf "$DEPS/robin-map.tar.gz" -C "$DEPS"
+    mkdir -p "$PREFIX/include"
+    cp -R "$DEPS/robin-map-1.3.0/include/tsl" "$PREFIX/include/"
+fi
+
 # --- GPU library -----------------------------------------------------------
 export VULKAN_SDK="$MOLTEN"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
@@ -108,6 +117,7 @@ cmake -S "$ROOT/gpu" -B "$OUT" -G Ninja \
     -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DSPARTAN_IOS=ON -DSPARTAN_LTO=OFF -DSPARTAN_PGO=off \
+    -DSPARTAN_TSL_INCLUDE="$PREFIX/include" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX"
 cmake --build "$OUT" --parallel "$JOBS" --target spartanportgpu
 

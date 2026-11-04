@@ -34,7 +34,7 @@ jobs:
           cmake --version || brew install cmake
           ninja --version || brew install ninja
           glslang --version || brew install glslang
-          brew install boost tsl-robin-map xcodegen
+          brew install boost xcodegen
 
       - name: Build renderer + app
         run: |
