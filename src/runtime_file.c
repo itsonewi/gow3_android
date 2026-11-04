@@ -180,9 +180,16 @@ static void convert_stat(const HostStat *s,GuestStat *g) {
 #else
     g->mode=(uint16_t)s->st_mode;
     g->blocks=s->st_blocks; g->blksize=(uint32_t)s->st_blksize;
+#if defined(__APPLE__)
+    /* Darwin's struct stat spells the times __timespec and has no st_atim. */
+    g->atime=(GuestTimespec){s->st_atimespec.tv_sec,s->st_atimespec.tv_nsec};
+    g->mtime=(GuestTimespec){s->st_mtimespec.tv_sec,s->st_mtimespec.tv_nsec};
+    g->ctime=(GuestTimespec){s->st_ctimespec.tv_sec,s->st_ctimespec.tv_nsec};
+#else
     g->atime=(GuestTimespec){s->st_atim.tv_sec,s->st_atim.tv_nsec};
     g->mtime=(GuestTimespec){s->st_mtim.tv_sec,s->st_mtim.tv_nsec};
     g->ctime=(GuestTimespec){s->st_ctim.tv_sec,s->st_ctim.tv_nsec};
+#endif
 #endif
     g->birthtime=g->ctime;
 }
