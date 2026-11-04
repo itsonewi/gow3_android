@@ -8,6 +8,15 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
+# iOS: Metal surface through MoltenVK, no X11/Wayland, no SDL video window (the
+# app owns the CAMetalLayer), no AMD FidelityFX driver, no FFmpeg (the PNG/trophy
+# media decoders are stubbed). The CPU-only app does not turn this on; the GPU
+# build line in ios/scripts/build-gpu-ios.sh does.
+option(SPARTAN_IOS "Target is iOS (Metal/MoltenVK)" OFF)
+if (SPARTAN_IOS)
+    enable_language(OBJCXX)
+    add_compile_definitions(SPARTAN_IOS SPARTAN_ARM)
+endif()
 # Frame pointers keep the loader's thread dumps (watchdog, SIGUSR2 sampling) walkable.
 add_compile_options(-fno-omit-frame-pointer)
 
@@ -57,7 +66,23 @@ if (SPARTAN_NIXPORT)
 endif()
 
 find_package(Vulkan REQUIRED)
-find_package(fmt REQUIRED)
+if (SPARTAN_IOS)
+    # fmt and xxhash come from the FEX iOS build (the same versions FEXCore uses),
+    # so the GPU library shares one copy of each on the iPhone.
+    set(FEX_IOS "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/FEX/build-ios")
+    add_library(fmt::fmt STATIC IMPORTED)
+    set_target_properties(fmt::fmt PROPERTIES
+        IMPORTED_LOCATION "${FEX_IOS}/External/fmt/libfmt.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/FEX/External/fmt/include")
+    add_library(xxhash_ios STATIC IMPORTED)
+    set_target_properties(xxhash_ios PROPERTIES
+        IMPORTED_LOCATION "${FEX_IOS}/External/xxhash/cmake_unofficial/libxxhash.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/FEX/External/xxhash")
+    set(SPARTAN_XXHASH xxhash_ios)
+else()
+    find_package(fmt REQUIRED)
+    set(SPARTAN_XXHASH PkgConfig::XXHASH)
+endif()
 find_package(Boost REQUIRED)
 # spartanport (Windows): MSYS2 has no magic_enum/miniz packages; the submodules are used instead.
 find_package(magic_enum QUIET)
@@ -77,9 +102,11 @@ if (NOT VulkanMemoryAllocator_FOUND)
     target_include_directories(VulkanMemoryAllocator INTERFACE ${VMA_INCLUDE_DIR})
 endif()
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(XXHASH REQUIRED IMPORTED_TARGET libxxhash)
+if (NOT SPARTAN_IOS)
+    pkg_check_modules(XXHASH REQUIRED IMPORTED_TARGET libxxhash)
+endif()
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
-if (NOT WIN32)
+if (NOT WIN32 AND NOT SPARTAN_IOS)
     pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
 endif()
 find_package(miniz QUIET)
@@ -99,10 +126,12 @@ find_program(GLSLANG_COMPILER NAMES glslang glslangValidator REQUIRED)
 set(SIRIT_USE_SYSTEM_SPIRV_HEADERS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/sirit EXCLUDE_FROM_ALL)
 
-# spartanport: FSR 3.1 temporal upscaling / frame generation, native Vulkan (MIT, FireBurn/FSR-Vulkan).
-set(FFX_VK_PORTABLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(FFX_VK_PORTABLE_BUILD_PROBE OFF CACHE BOOL "" FORCE)
-add_subdirectory(third_party/fsr-vulkan EXCLUDE_FROM_ALL)
+if (NOT SPARTAN_IOS)
+    # spartanport: FSR 3.1 temporal upscaling / frame generation, native Vulkan (MIT, FireBurn/FSR-Vulkan).
+    set(FFX_VK_PORTABLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(FFX_VK_PORTABLE_BUILD_PROBE OFF CACHE BOOL "" FORCE)
+    add_subdirectory(third_party/fsr-vulkan EXCLUDE_FROM_ALL)
+endif()
 
 # Host shaders -> headers (same scheme as shadPS4's host_shaders/CMakeLists.txt).
 set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/shadps4/video_core/host_shaders)
@@ -161,11 +190,26 @@ set(COMMON
     shadps4/common/string_util.cpp shadps4/common/thread.cpp shadps4/common/signal_context.cpp
     shim/common/logging/log.cpp)
 file(GLOB AVPLAYER CONFIGURE_DEPENDS shadps4/core/libraries/avplayer/*.cpp)
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil libswscale libswresample)
+if (SPARTAN_IOS)
+    # No libav* on iOS: the two FFmpeg clients (PNG and trophy media) are
+    # replaced by shim/ios_stub.cpp. The rest of the renderer does not use it.
+    set(SPARTAN_FFMPEG "")
+else()
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil libswscale libswresample)
+    set(SPARTAN_FFMPEG PkgConfig::FFMPEG)
+endif()
 file(GLOB SHIM_SOURCES CONFIGURE_DEPENDS shim/*.cpp shim/*/*.cpp)
+if (SPARTAN_IOS)
+    list(FILTER VIDEO_CORE EXCLUDE REGEX "fsr_driver\\.cpp$")
+    list(FILTER SHIM_SOURCES EXCLUDE REGEX "window\\.cpp$")
+    list(FILTER SHIM_SOURCES EXCLUDE REGEX "spartanport_png\\.cpp$")
+    list(FILTER SHIM_SOURCES EXCLUDE REGEX "spartanport_trophy_media\\.cpp$")
+    list(APPEND SHIM_SOURCES shim/window_ios.mm shim/fsr_stub.cpp shim/ios_stub.cpp)
+    set_source_files_properties(shim/window_ios.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+endif()
 # Windows: a DLL cannot leave the runtime_* symbols for spartanport-probe.exe to resolve, so the
-# library is static there and linked into the executable.
-if (WIN32)
+# library is static there and linked into the executable. iOS is static for the same reason.
+if (WIN32 OR SPARTAN_IOS)
     set(SPARTANGPU_KIND STATIC)
 else()
     set(SPARTANGPU_KIND SHARED)
@@ -193,13 +237,15 @@ target_include_directories(spartanportgpu PRIVATE shim shadps4 ${SHADER_INCLUDE}
 target_compile_definitions(spartanportgpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
 target_compile_options(spartanportgpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
 # Runtime symbols (runtime_memory_*, runtime_process_*) resolve against spartanport-probe.
-if (NOT WIN32)
+if (NOT WIN32 AND NOT SPARTAN_IOS)
     target_link_options(spartanportgpu PRIVATE -Wl,--allow-shlib-undefined)
 endif()
-target_link_libraries(spartanportgpu PRIVATE ffx-vulkan::portable ffx-vulkan::fsr4-v07-vulkan
-    ffx-vulkan::fsr3-vk-framegeneration-3.1.6)
+if (NOT SPARTAN_IOS)
+    target_link_libraries(spartanportgpu PRIVATE ffx-vulkan::portable ffx-vulkan::fsr4-v07-vulkan
+        ffx-vulkan::fsr3-vk-framegeneration-3.1.6)
+endif()
 target_link_libraries(spartanportgpu PUBLIC Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
-    tsl::robin_map GPUOpen::VulkanMemoryAllocator PkgConfig::XXHASH PkgConfig::SDL3 PkgConfig::FFMPEG miniz::miniz Zydis::Zydis sirit)
+    tsl::robin_map GPUOpen::VulkanMemoryAllocator ${SPARTAN_XXHASH} PkgConfig::SDL3 ${SPARTAN_FFMPEG} miniz::miniz Zydis::Zydis sirit)
 if (WIN32)
     # Guest code is entered with the System V ABI; NOMINMAX/WIN32_LEAN_AND_MEAN keep
     # <windows.h> out of the way of std::min/max and the Vulkan/SDL headers.
@@ -207,8 +253,22 @@ if (WIN32)
     target_compile_options(spartanportgpu PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/spartanport_win_compat.h)
     target_include_directories(spartanportgpu PRIVATE third_party/xbyak)
     target_link_libraries(spartanportgpu PUBLIC Vulkan::Vulkan ws2_32 bcrypt ntdll synchronization winmm pdh)
+elseif (SPARTAN_IOS)
+    # MoltenVK is the Vulkan implementation; the Metal surface comes from
+    # vk_platform.cpp's VK_USE_PLATFORM_METAL_EXT path.
+    target_link_libraries(spartanportgpu PUBLIC Vulkan::Vulkan
+        "-Wl,-framework,Metal" "-Wl,-framework,QuartzCore" "-Wl,-framework,UIKit"
+        "-Wl,-framework,Foundation" "-Wl,-framework,CoreGraphics" "-Wl,-framework,IOSurface"
+        "-Wl,-framework,CoreVideo")
+    target_compile_options(spartanportgpu PRIVATE -Wno-shorten-64-to-32)
 else()
     target_link_libraries(spartanportgpu PUBLIC PkgConfig::X11)
+endif()
+
+# The iOS build only needs the renderer library: no host tools, tests or
+# packaging targets (the app links spartanportgpu directly).
+if (SPARTAN_IOS)
+    return()
 endif()
 
 # spartanport (Windows): spartanportgpu is a static library there, so the loader and the HLE runtime are
