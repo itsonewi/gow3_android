@@ -21,7 +21,7 @@ targets:
   # The iOS runtime: stock loader + HLE + FEX glue + platform shims.
   # ---------------------------------------------------------------------------
   SpartanRuntime:
-    type: staticLibrary
+    type: library.static
     platform: iOS
     sources:
       - path: Runtime
