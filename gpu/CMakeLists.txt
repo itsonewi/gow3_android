@@ -276,7 +276,8 @@ elseif (SPARTAN_IOS)
         "-Wl,-framework,Metal" "-Wl,-framework,QuartzCore" "-Wl,-framework,UIKit"
         "-Wl,-framework,Foundation" "-Wl,-framework,CoreGraphics" "-Wl,-framework,IOSurface"
         "-Wl,-framework,CoreVideo")
-    target_compile_options(spartanportgpu PRIVATE -Wno-shorten-64-to-32)
+    target_compile_options(spartanportgpu PRIVATE -Wno-shorten-64-to-32
+        -include "${CMAKE_CURRENT_SOURCE_DIR}/shim/spartanport_ios_compat.h")
 else()
     target_link_libraries(spartanportgpu PUBLIC PkgConfig::X11)
 endif()

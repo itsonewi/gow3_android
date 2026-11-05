@@ -18,6 +18,8 @@
 #include <thread>
 #include <queue>
 
+#include "common/polyfill_thread.h"
+
 #include "spartanport_toggles.h"
 #include "common/assert.h"
 #include "common/interval_set.h"
