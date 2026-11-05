@@ -64,6 +64,23 @@ asm(".section .rdata,\"dr\"\n"
     ".global spartanport_title_ttf_end\n"
     "spartanport_title_ttf_end:\n"
     ".text\n");
+#elif defined(__APPLE__)
+// Mach-O: sections are (segment, section), and C symbols carry a leading
+// underscore in assembly. .incbin itself is supported by clang's assembler.
+asm(".section __TEXT,__const\n"
+    ".p2align 4\n"
+    ".globl _spartanport_font_ttf\n"
+    "_spartanport_font_ttf:\n"
+    ".incbin \"" SPARTAN_FONT_PATH "\"\n"
+    ".globl _spartanport_font_ttf_end\n"
+    "_spartanport_font_ttf_end:\n"
+    ".p2align 4\n"
+    ".globl _spartanport_title_ttf\n"
+    "_spartanport_title_ttf:\n"
+    ".incbin \"" SPARTAN_TITLE_FONT_PATH "\"\n"
+    ".globl _spartanport_title_ttf_end\n"
+    "_spartanport_title_ttf_end:\n"
+    ".text\n");
 #else
 asm(".section .rodata\n"
     ".balign 16\n"
