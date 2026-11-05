@@ -11,7 +11,7 @@ Linux/glibc ELF, so the runtime is rebuilt as Mach-O inside the app:
 | Layer | Where | State |
 |---|---|---|
 | SwiftUI launcher, game import, diagnostics | `SpartanPort/` | implemented |
-| JIT: StikDebug, BRK pool, RW alias, no-footprint | `SpartanPort/Native/JITAllocator.c`, `Core/JITPool.swift` | implemented |
+| JIT: StikDebug or built-in StikJIT, BRK pool | `SpartanPort/Native/JITAllocator.c`, `Core/JITPool.swift`, `SpartanPortJITHelper/` | implemented |
 | Memory+: entitlements, 512 GB map, donation extension | `SpartanPort/Resources/`, `SpartanPortMemoryHost/` | implemented |
 | PS4 memory, loader, kernel HLE | stock `src/runtime_*.c` + `src/probe.c`, built by the app | compiled in |
 | CPU: FEXCore on the JIT pool | `Runtime/cpu/` | compiled in |
@@ -29,9 +29,18 @@ CPU-only switch decides which one starts.
 iOS gives an app executable memory only while a debugger is attached. The layer
 is Madeira's, not an approximation:
 
-1. **Enable JIT.** `RuntimeController` opens StikDebug's `stikdebug://enable-jit`
-   URL with this process's bundle id, pid and `spartanport-jit.js`. StikDebug
-   attaches, runs the script and sets `CS_DEBUGGED`.
+1. **Enable JIT.** There are two routes, chosen in the JIT card or
+   automatically:
+   * **StikDebug**, if its `stikdebug://` scheme is installed:
+     `RuntimeController` opens `stikdebug://enable-jit` with this process's
+     bundle id, pid and `spartanport-jit.js`.
+   * **Built-in StikJIT** (no second app): `SpartanPortJITHelper.appex` is an
+     `com.apple.ar.viewer` app extension that runs the bundled
+     `StikJIT.framework`, attaches to this app, prepares the Developer Disk
+     Image and runs the same script. It needs iOS 26+, LocalDevVPN and this
+     iPhone's pairing file (import it with **Pairing file**). The framework is
+     in `ios/Frameworks` under MPL-2.0 (`ios/legal`).
+   Either way the debugger sets `CS_DEBUGGED` and serves the script.
 2. **Allocate the pool.** `sp_pool_prepare()` executes `BRK #0xf00d` with
    `x16 = 1`, `x0 = 0`, `x1 = size`. The script answers with StikDebug's `_M`
    allocation and `prepare_memory_region()`, which authorizes the RX run and
@@ -50,6 +59,36 @@ is Madeira's, not an approximation:
 
 The SIGTRAP fallback only skips this protocol's `BRK #0xf00d` and returns 0, so
 a pool request without a debugger fails instead of crashing the app.
+
+### Built-in StikJIT
+
+`SpartanPortJITHelper` follows Madeira's helper design:
+
+* a classic app extension on `com.apple.ar.viewer`, started through the private
+  `NSExtension` API by the helper's own bundle id, in a separate process (a
+  process cannot synchronously debug itself);
+* the JSON request carries the target pid, the pairing file and the base64 of
+  `spartanport-jit.js`; the helper writes the pairing file to a temporary
+  `Library/StikJIT` path and deletes it after the request;
+* `StikJIT.enableJIT(... script: .customBase64(...), forceScript: true)` attaches
+  and keeps the script running until the app prepares its pool and sends the
+  detach BRK; the request then completes;
+* both apps embed their own helper because iOS requires an extension id to be
+  prefixed by the host app's id (`com.onewi.spartanport.jithelper` and
+  `com.onewi.spartanport.gpu.jithelper`), and both embed the same framework in
+  `Frameworks/`.
+
+Built-in JIT requires iOS 26 or later (as Madeira's does) and a normal
+sideloaded install; the app, helper and framework must be signed together and
+the sideloader must keep app extensions. The pairing file can be imported with
+the **Pairing file** button (or dropped into `Documents/StikJIT/pairingFile.plist`
+through Finder file sharing); on-device pairing generation is not implemented,
+so use a computer-made pairing file.
+
+The bundled framework's Swift interface was emitted by Swift 6.4. Its module
+selectors (`Module::Type`) are stripped, and the interface compiler version is
+marked 6.3, so Xcode 26 can import it; regenerate the interface if the framework
+is updated.
 
 ## The memory layer
 
@@ -139,7 +178,7 @@ holds both is fine.
 
 ## Running
 
-1. Enable JIT (StikDebug + LocalDevVPN + pairing file).
+1. Enable JIT: StikDebug, or the built-in helper with LocalDevVPN + a pairing file.
 2. Allocate the pool (128–896 MB; 512 MB is a good start).
 3. Import the prepared folder.
 4. Play. The CPU app is CPU-only: the Play card says so, and the log shows the
@@ -164,8 +203,8 @@ the Stop button only reports the request.
 * The prepared folder is made on a computer. `prepare.py` also writes the patch
   set and the ISA rewrite file; this build runs the boot image without them.
   Settings, mods and save import from the Android launcher are not ported yet.
-* The first run needs StikDebug, LocalDevVPN and a pairing file. The built-in
-  StikJIT helper is not bundled, so the StikDebug route is the only one.
+* The first run needs LocalDevVPN and a pairing file. Use StikDebug if it is
+  installed, or the bundled built-in StikJIT helper (iOS 26+) with no second app.
 
 ## Next
 
