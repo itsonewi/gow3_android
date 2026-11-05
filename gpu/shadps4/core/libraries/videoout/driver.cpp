@@ -104,7 +104,9 @@ void VideoOutDriver::SwapThread(std::stop_token token) {
         {
             std::unique_lock lock{swap_mutex};
             swap_busy = false;
-            if (!swap_cv.wait(lock, token, [this] { return !swap_queue.empty(); })) {
+            Common::CondvarWait(swap_cv, lock, token,
+                                [this] { return !swap_queue.empty(); });
+            if (token.stop_requested() && swap_queue.empty()) {
                 return;
             }
             work = std::move(swap_queue.front());
