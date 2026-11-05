@@ -175,6 +175,7 @@ targets:
           - "$(SRCROOT)/Shared"
           - "$(SRCROOT)/../src"
           - "$(SRCROOT)/.."
+          - "$(SRCROOT)/.build/ios/include"
           - "$(SRCROOT)/../out/gpu-ios/include"
         GCC_PREPROCESSOR_DEFINITIONS:
           - "$(inherited)"
