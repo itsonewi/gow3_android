@@ -148,6 +148,12 @@ targets:
         excludes:
           - "Resources/Info.plist"
           - "Resources/SpartanPort.entitlements"
+      # SDL3 is inside libspartanportgpu-all.a; the GPU app can therefore use the
+      # real pad and audio HLE instead of the CPU app's stubs.
+      - path: ../src/runtime_pad.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
+      - path: ../src/runtime_audio.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
     dependencies:
       - target: SpartanRuntime
       - target: SpartanPortMemoryHostGPU
@@ -165,7 +171,11 @@ targets:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SPARTANPORT_GPU"
         HEADER_SEARCH_PATHS:
           - "$(SRCROOT)/Runtime/include"
+          - "$(SRCROOT)/Runtime/platform"
           - "$(SRCROOT)/Shared"
+          - "$(SRCROOT)/../src"
+          - "$(SRCROOT)/.."
+          - "$(SRCROOT)/../out/gpu-ios/include"
         GCC_PREPROCESSOR_DEFINITIONS:
           - "$(inherited)"
           - "SPARTANPORT_RUNTIME=1"

@@ -193,6 +193,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(IOS, "scripts", "build-gpu-ios.sh")))
         self.assertTrue(os.path.exists(os.path.join(ROOT, "gpu", "README-ios.md")))
 
+    def test_gpu_app_uses_the_real_pad_and_audio(self):
+        sources = self.targets["SpartanPortGPU"]["sources"]
+        paths = [s["path"] if isinstance(s, dict) else s for s in sources]
+        self.assertIn("../src/runtime_pad.c", paths)
+        self.assertIn("../src/runtime_audio.c", paths)
+        # The CPU app keeps the stubs, so they must be weak and overridable.
+        stubs = read("Runtime", "hle", "sp_hle_stubs.c")
+        self.assertIn("SP_WEAK uintptr_t runtime_pad_resolve", stubs)
+        self.assertIn("SP_WEAK uintptr_t runtime_audio_resolve", stubs)
+
     def test_moltenvk_is_a_portability_implementation(self):
         render = os.path.join(ROOT, "gpu", "shadps4", "video_core", "renderer_vulkan")
         platform = open(os.path.join(render, "vk_platform.cpp"), encoding="utf-8").read()

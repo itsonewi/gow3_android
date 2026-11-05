@@ -11,12 +11,20 @@
 
 #include <stdint.h>
 
-uintptr_t runtime_audio_resolve(const char *name) { (void)name; return 0; }
-void runtime_audio_report(void) {}
+/* Weak: the GPU app compiles the real SDL3 pad/audio modules, whose strong
+ * definitions then override these. */
+#if defined(__APPLE__)
+#define SP_WEAK __attribute__((weak))
+#else
+#define SP_WEAK
+#endif
 
-uintptr_t runtime_pad_resolve(const char *name) { (void)name; return 0; }
-void runtime_pad_report(void) {}
-int runtime_pad_describe(void) { return 0; }
+SP_WEAK uintptr_t runtime_audio_resolve(const char *name) { (void)name; return 0; }
+SP_WEAK void runtime_audio_report(void) {}
+
+SP_WEAK uintptr_t runtime_pad_resolve(const char *name) { (void)name; return 0; }
+SP_WEAK void runtime_pad_report(void) {}
+SP_WEAK int runtime_pad_describe(void) { return 0; }
 
 uintptr_t runtime_videodec_resolve(const char *name) { (void)name; return 0; }
 
@@ -30,12 +38,6 @@ int vulkan_smoke(void) { return 1; }
  * spartanport_actors, spartanportgpu) and in the SDL pad module. The CPU-only
  * app still references them from probe.c; weak definitions keep the link and
  * let the GPU app's strong symbols win. */
-#if defined(__APPLE__)
-#define SP_WEAK __attribute__((weak))
-#else
-#define SP_WEAK
-#endif
-
 static unsigned char sp_qte_state[4096];
 
 SP_WEAK uintptr_t spartanport_actor_slots_address(void) { return 0; }
