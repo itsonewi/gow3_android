@@ -61,7 +61,10 @@ cmake --build "$DEPS/SDL-build" --parallel "$JOBS" --target install
 # --- Zydis -----------------------------------------------------------------
 ZY_SRC="$DEPS/zydis"
 if [[ ! -d "$ZY_SRC" ]]; then
-    git clone --depth 1 https://github.com/zyantific/zydis "$ZY_SRC"
+    git clone --depth 1 --recurse-submodules --shallow-submodules \
+        https://github.com/zyantific/zydis "$ZY_SRC"
+else
+    git -C "$ZY_SRC" submodule update --init --recursive --depth 1
 fi
 cmake -S "$ZY_SRC" -B "$DEPS/zydis-build" -G Ninja \
     -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 \
