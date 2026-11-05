@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: ios-gpu-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   gpu:
