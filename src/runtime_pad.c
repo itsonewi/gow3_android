@@ -639,8 +639,13 @@ static void read_inject(void) {
     if (st.st_mtime==mtime.tv_sec && st.st_size==mtime.tv_nsec) return;
     mtime=(struct timespec){st.st_mtime,(long)st.st_size};
 #else
+#if defined(__APPLE__)
+    if (st.st_mtimespec.tv_sec==mtime.tv_sec && st.st_mtimespec.tv_nsec==mtime.tv_nsec) return;
+    mtime=st.st_mtimespec;
+#else
     if (st.st_mtim.tv_sec==mtime.tv_sec && st.st_mtim.tv_nsec==mtime.tv_nsec) return;
     mtime=st.st_mtim;
+#endif
 #endif
     FILE *f=fopen(path,"r");
     if (!f) return;
