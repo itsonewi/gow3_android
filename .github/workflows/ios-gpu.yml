@@ -27,6 +27,17 @@ jobs:
         with:
           submodules: false
 
+      - name: Select Xcode
+        # StikJIT's .swiftinterface is built by Xcode 26's Swift. Use it when
+        # the image provides it; older toolchains reject the interface.
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          latest="$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | sort -V | tail -1)"
+          if [[ -n "$latest" ]]; then
+            sudo xcode-select -s "$latest/Contents/Developer"
+          fi
+          xcodebuild -version
+
       - name: Toolchain
         run: |
           xcodebuild -version

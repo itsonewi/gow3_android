@@ -98,6 +98,11 @@ targets:
       - target: SpartanRuntime
       - target: SpartanPortMemoryHost
         embed: true
+      - target: SpartanPortJITHelper
+        embed: true
+      - framework: Frameworks/StikJIT.xcframework
+        embed: true
+        link: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport
@@ -163,6 +168,11 @@ targets:
       - target: SpartanRuntime
       - target: SpartanPortMemoryHostGPU
         embed: true
+      - target: SpartanPortJITHelperGPU
+        embed: true
+      - framework: Frameworks/StikJIT.xcframework
+        embed: true
+        link: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport.gpu
@@ -255,3 +265,61 @@ targets:
         OTHER_LDFLAGS: "$(inherited)"
         HEADER_SEARCH_PATHS:
           - "$(SRCROOT)/Shared"
+
+  # ---------------------------------------------------------------------------
+  # Built-in JIT: a separate process (an app extension on com.apple.ar.viewer)
+  # that attaches to the app with the bundled StikJIT framework, so the user
+  # does not need StikDebug installed. The framework lives in the app's
+  # Frameworks folder; the helper resolves it through @executable_path/../../.
+  # Each app has its own helper because iOS requires the extension id to be
+  # prefixed by the host app's bundle id.
+  # ---------------------------------------------------------------------------
+  SpartanPortJITHelper:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SpartanPortJITHelper
+        excludes:
+          - "Info.plist"
+          - "SpartanPortJITHelper.entitlements"
+      - path: SpartanPort/Core/JITBuiltInMessages.swift
+    dependencies:
+      - framework: Frameworks/StikJIT.xcframework
+      - sdk: JavaScriptCore.framework
+      - sdk: Network.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport.jithelper
+        PRODUCT_NAME: SpartanPortJITHelper
+        INFOPLIST_FILE: SpartanPortJITHelper/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SpartanPortJITHelper/SpartanPortJITHelper.entitlements
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APPLICATION_EXTENSION_API_ONLY: NO
+        IPHONEOS_DEPLOYMENT_TARGET: "17.4"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../../Frameworks @executable_path/Frameworks"
+
+  SpartanPortJITHelperGPU:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SpartanPortJITHelper
+        excludes:
+          - "Info.plist"
+          - "SpartanPortJITHelper.entitlements"
+      - path: SpartanPort/Core/JITBuiltInMessages.swift
+    dependencies:
+      - framework: Frameworks/StikJIT.xcframework
+      - sdk: JavaScriptCore.framework
+      - sdk: Network.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport.gpu.jithelper
+        PRODUCT_NAME: SpartanPortJITHelper
+        INFOPLIST_FILE: SpartanPortJITHelper/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SpartanPortJITHelper/SpartanPortJITHelper.entitlements
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APPLICATION_EXTENSION_API_ONLY: NO
+        IPHONEOS_DEPLOYMENT_TARGET: "17.4"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../../Frameworks @executable_path/Frameworks"

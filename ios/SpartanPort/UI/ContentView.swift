@@ -8,7 +8,9 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var showFolderPicker = false
+    @State private var showPairingPicker = false
     @State private var showLog = true
+    @AppStorage("SpartanJITMethod") private var jitMethod = "automatic"
 
     var body: some View {
         NavigationStack {
@@ -39,6 +41,24 @@ struct ContentView: View {
                 case .failure(let error):
                     LogStore.shared.log("[library] folder picker failed: \(error.localizedDescription)",
                                         level: .error)
+                }
+            }
+            .fileImporter(isPresented: $showPairingPicker,
+                          allowedContentTypes: [.data, .propertyList],
+                          allowsMultipleSelection: false) { result in
+                switch result {
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    do {
+                        try JITPairingStore.import(from: url)
+                        LogStore.shared.log("[jit] pairing file imported", level: .success)
+                    } catch {
+                        LogStore.shared.log("[jit] pairing file import failed: "
+                                            + error.localizedDescription, level: .error)
+                    }
+                case .failure(let error):
+                    LogStore.shared.log("[jit] pairing file picker failed: "
+                                        + error.localizedDescription, level: .error)
                 }
             }
             .onChange(of: scenePhase) { _, phase in
@@ -149,7 +169,7 @@ struct ContentView: View {
     // MARK: - JIT controls
 
     private var jitCard: some View {
-        card(title: "JIT layer", subtitle: "Madeira-compatible StikDebug / BRK #0xf00d") {
+        card(title: "JIT layer", subtitle: "StikDebug or built-in StikJIT / BRK #0xf00d") {
             HStack(spacing: 10) {
                 Button {
                     runtime.enableJIT()
@@ -167,6 +187,26 @@ struct ContentView: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(runtime.busy || runtime.pool != nil)
+            }
+
+            HStack {
+                Picker("Method", selection: $jitMethod) {
+                    Text("Automatic").tag("automatic")
+                    Text("StikDebug").tag("stikDebug")
+                    Text("Built-in").tag("builtIn")
+                }
+                .pickerStyle(.menu)
+                .tint(.orange)
+
+                Spacer()
+
+                Button {
+                    showPairingPicker = true
+                } label: {
+                    Label("Pairing file", systemImage: "doc.badge.plus")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(runtime.busy)
             }
 
             HStack {

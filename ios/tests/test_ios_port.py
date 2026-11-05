@@ -258,5 +258,57 @@ class SwiftBridgeTests(unittest.TestCase):
             self.assertNotIn("JITMemory", source)
 
 
+class BuiltInJITTests(unittest.TestCase):
+    def setUp(self):
+        self.project = yaml.safe_load(open(os.path.join(IOS, "project.yml"), encoding="utf-8"))
+        self.targets = self.project["targets"]
+
+    def test_stikjit_framework_is_bundled(self):
+        framework = os.path.join(IOS, "Frameworks", "StikJIT.xcframework", "ios-arm64",
+                                 "StikJIT.framework", "StikJIT")
+        self.assertTrue(os.path.exists(framework))
+        self.assertTrue(os.path.exists(os.path.join(IOS, "legal",
+                                                     "LICENSE-StikJIT-MPL-2.0.txt")))
+
+    def test_helper_targets_use_the_extension_point(self):
+        for name, bundle in (("SpartanPortJITHelper", "com.onewi.spartanport.jithelper"),
+                             ("SpartanPortJITHelperGPU",
+                              "com.onewi.spartanport.gpu.jithelper")):
+            target = self.targets[name]
+            self.assertEqual(target["type"], "app-extension")
+            self.assertEqual(target["settings"]["base"]["PRODUCT_BUNDLE_IDENTIFIER"], bundle)
+            plist = open(os.path.join(IOS, "SpartanPortJITHelper", "Info.plist"),
+                         encoding="utf-8").read()
+            self.assertIn("com.apple.ar.viewer", plist)
+            self.assertIn("SpartanPortJITHelperHandler", plist)
+            sources = [s["path"] if isinstance(s, dict) else s for s in target["sources"]]
+            self.assertIn("SpartanPort/Core/JITBuiltInMessages.swift", sources)
+            self.assertIn("Frameworks/StikJIT.xcframework",
+                          [d.get("framework") for d in target["dependencies"]])
+
+    def test_both_apps_embed_their_helper_and_framework(self):
+        for app, helper in (("SpartanPort", "SpartanPortJITHelper"),
+                            ("SpartanPortGPU", "SpartanPortJITHelperGPU")):
+            deps = self.targets[app]["dependencies"]
+            self.assertIn(helper, [d.get("target") for d in deps if d.get("embed")])
+            frameworks = [d for d in deps if d.get("framework")]
+            self.assertEqual(frameworks[0]["framework"], "Frameworks/StikJIT.xcframework")
+            self.assertTrue(frameworks[0]["embed"])
+
+    def test_helper_calls_stikjit_and_app_falls_back_to_it(self):
+        helper = read("SpartanPortJITHelper", "SpartanPortJITHelper.swift")
+        self.assertIn("import StikJIT", helper)
+        self.assertIn("StikJIT.enableJIT", helper)
+        self.assertIn("customBase64", helper)
+        host = read("SpartanPort", "Core", "JITBuiltInHost.swift")
+        self.assertIn("SpartanPortJITHelper.appex", host)
+        controller = read("SpartanPort", "Core", "RuntimeController.swift")
+        self.assertIn("enableWithBuiltIn", controller)
+        self.assertIn("SpartanPortBuiltInJIT", controller)
+        self.assertIn("JITPairingStore.data()", controller)
+        pairing = read("SpartanPort", "Core", "JITPairingStore.swift")
+        self.assertIn("pairingFile.plist", pairing)
+
+
 if __name__ == "__main__":
     unittest.main()

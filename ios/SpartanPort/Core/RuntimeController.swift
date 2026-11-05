@@ -21,7 +21,7 @@ final class RuntimeController: ObservableObject {
         var label: String {
             switch self {
             case .idle: return "Not enabled"
-            case .enabling: return "Waiting for StikDebug…"
+            case .enabling: return "Waiting for debugger…"
             case .attached: return "Debugger attached"
             case .ready: return "JIT ready"
             case .failed(let message): return message
@@ -106,7 +106,25 @@ final class RuntimeController: ObservableObject {
         return try? Data(contentsOf: url)
     }
 
-    /// Open StikDebug with our bundled script, targeting this process.
+    enum JITMethod: String {
+        case automatic
+        case stikDebug
+        case builtIn
+    }
+
+    /// Automatic uses StikDebug when its URL scheme is installed and otherwise
+    /// falls back to the bundled StikJIT helper; `SpartanJITMethod` can force
+    /// either one ("builtIn" or "stikDebug").
+    static var preferredMethod: JITMethod {
+        if let raw = UserDefaults.standard.string(forKey: "SpartanJITMethod"),
+           let method = JITMethod(rawValue: raw) {
+            return method
+        }
+        return .automatic
+    }
+
+    /// Attach a debugger to this process: StikDebug if selected/installed, or
+    /// the built-in helper (no StikDebug app needed, only its pairing file).
     func enableJIT() {
         guard !busy else { return }
         refresh()
@@ -115,11 +133,21 @@ final class RuntimeController: ObservableObject {
             fail(SigningStatus.notDebuggableMessage)
             return
         }
-        guard let base = Self.stikDebugURL else {
-            fail("StikDebug is not installed (stikdebug:// scheme not found). Install StikDebug, "
-                 + "then tap Enable JIT again.")
+
+        let method = Self.preferredMethod
+        if method != .builtIn, let base = Self.stikDebugURL {
+            enableWithStikDebug(base)
             return
         }
+        if method == .stikDebug {
+            fail("StikDebug is not installed (stikdebug:// scheme not found). Install it, or "
+                 + "switch JIT method to Automatic to use the built-in helper.")
+            return
+        }
+        enableWithBuiltIn()
+    }
+
+    private func enableWithStikDebug(_ base: URL) {
         guard let bundleID = Bundle.main.bundleIdentifier, let scriptData else {
             fail("spartanport-jit.js is missing from the app bundle.")
             return
@@ -150,10 +178,47 @@ final class RuntimeController: ObservableObject {
         }
     }
 
-    private func waitForDebugger() {
+    /// Start the helper extension and wait for it to attach. The helper's
+    /// request completes only after our script detaches (pool prepared), so it
+    /// is not awaited here.
+    private func enableWithBuiltIn() {
+        if let reason = SpartanPortBuiltInJIT.unavailableReason {
+            fail(reason)
+            return
+        }
+        guard let scriptData else {
+            fail("spartanport-jit.js is missing from the app bundle.")
+            return
+        }
+        guard let pairing = JITPairingStore.data() else {
+            fail("Built-in JIT needs this iPhone's pairing file. Import pairingFile.plist "
+                 + "(the StikDebug guide explains how to make one), then tap Enable JIT again.")
+            return
+        }
+
+        jitState = .enabling
+        LogStore.shared.log("[jit] starting the built-in StikJIT helper for pid \(getpid())",
+                            level: .info)
+        let request = SpartanPortJITRequest.enable(targetPID: getpid(), pairingData: pairing,
+                                                   scriptBase64: scriptData.base64EncodedString())
+        SpartanPortBuiltInJIT.send(request, started: { [weak self] in
+            // The helper prepares the DDI and attaches; the first run may need
+            // to download it.
+            self?.waitForDebugger(timeout: 180)
+        }, completion: { result in
+            switch result {
+            case .success(let response):
+                LogStore.shared.log("[jit] helper: \(response.message)", level: .success)
+            case .failure(let error):
+                LogStore.shared.log("[jit] helper: \(error.localizedDescription)", level: .error)
+            }
+        })
+    }
+
+    private func waitForDebugger(timeout: TimeInterval = 90) {
         waiter?.invalidate()
-        let deadline = Date().addingTimeInterval(90)
-        LogStore.shared.log("[jit] waiting for CS_DEBUGGED (timeout 90s)…", level: .info)
+        let deadline = Date().addingTimeInterval(timeout)
+        LogStore.shared.log("[jit] waiting for CS_DEBUGGED (timeout \(Int(timeout))s)…", level: .info)
 
         let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] timer in
             Task { @MainActor in
@@ -171,8 +236,8 @@ final class RuntimeController: ObservableObject {
                 } else if Date() >= deadline {
                     timer.invalidate()
                     self.waiter = nil
-                    self.fail("StikDebug did not attach within 90 seconds. Check its pairing file and "
-                              + "LocalDevVPN, then try again.")
+                    self.fail("No debugger attached within \(Int(timeout)) seconds. Check the "
+                              + "pairing file and LocalDevVPN, then try again.")
                 }
             }
         }
@@ -186,7 +251,7 @@ final class RuntimeController: ObservableObject {
         guard !busy else { return }
         refresh()
         guard csDebugged() || pool != nil else {
-            fail("Enable JIT first: StikDebug must be attached to answer the pool request.")
+            fail("Enable JIT first: a debugger must be attached to answer the pool request.")
             return
         }
         guard pool == nil else { return }
