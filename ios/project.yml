@@ -295,7 +295,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: SpartanPortJITHelper/SpartanPortJITHelper.entitlements
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1,2"
-        APPLICATION_EXTENSION_API_ONLY: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
         IPHONEOS_DEPLOYMENT_TARGET: "17.4"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../../Frameworks @executable_path/Frameworks"
 
@@ -320,6 +320,6 @@ targets:
         CODE_SIGN_ENTITLEMENTS: SpartanPortJITHelper/SpartanPortJITHelper.entitlements
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1,2"
-        APPLICATION_EXTENSION_API_ONLY: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
         IPHONEOS_DEPLOYMENT_TARGET: "17.4"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../../Frameworks @executable_path/Frameworks"
