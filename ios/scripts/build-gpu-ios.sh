@@ -124,6 +124,8 @@ cmake -S "$ROOT/gpu" -B "$OUT" -G Ninja \
     -DVulkan_LIBRARY="$MOLTEN/lib/libvulkan.a" \
     -DBOOST_ROOT="$BREW_PREFIX/opt/boost" \
     -DSPARTAN_BOOST_INCLUDE="$BREW_PREFIX/opt/boost/include" \
+    -DVMA_INCLUDE_DIR="$PREFIX/include/vma" \
+    -DZydis_DIR="$PREFIX/lib/cmake/Zydis" \
     -DSPARTAN_IOS=ON -DSPARTAN_LTO=OFF -DSPARTAN_PGO=off \
     -DSPARTAN_TSL_INCLUDE="$PREFIX/include" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX"
