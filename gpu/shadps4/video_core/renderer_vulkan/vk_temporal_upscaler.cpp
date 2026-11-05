@@ -16,7 +16,12 @@
 
 #include "spartanport_settings.h"
 #include "spartanport_toggles.h"
+#if defined(SPARTAN_IOS)
+// iOS: the FFX provider is not built; the shim reports FSR 3 unavailable.
+#include "ffx_vk_portable_ios.h"
+#else
 #include "ffx_vk_portable.h"
+#endif
 #include "video_core/host_shaders/upscale_merge_comp.h"
 #include "video_core/host_shaders/upscale_reactive_comp.h"
 #include "video_core/host_shaders/stencil_reactive_comp.h"
