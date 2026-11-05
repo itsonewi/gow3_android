@@ -57,6 +57,11 @@ jobs:
         with:
           submodules: false
 
+      - name: LibAtrac9 submodule
+        # The GPU target lists third_party/LibAtrac9/C/src; XcodeGen validates
+        # every target's source directories even when only the CPU app builds.
+        run: git submodule update --init --depth 1 third_party/LibAtrac9
+
       - name: Toolchain
         run: |
           sw_vers
