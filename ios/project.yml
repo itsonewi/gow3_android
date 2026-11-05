@@ -150,7 +150,7 @@ targets:
           - "Resources/SpartanPort.entitlements"
     dependencies:
       - target: SpartanRuntime
-      - target: SpartanPortMemoryHost
+      - target: SpartanPortMemoryHostGPU
         embed: true
     settings:
       base:
@@ -208,6 +208,28 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport.memoryhost
+        PRODUCT_NAME: SpartanPortMemoryHost
+        INFOPLIST_FILE: SpartanPortMemoryHost/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SpartanPortMemoryHost/MemoryHost.entitlements
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CLANG_ENABLE_OBJC_ARC: YES
+        OTHER_LDFLAGS: "$(inherited)"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Shared"
+
+  # The GPU app embeds the same extension under its own prefix: Xcode requires
+  # an app extension's bundle id to be prefixed by its host app's bundle id.
+  # The product name stays SpartanPortMemoryHost so MemoryDonor finds it by
+  # path; only the bundle id differs.
+  SpartanPortMemoryHostGPU:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SpartanPortMemoryHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.onewi.spartanport.gpu.memoryhost
         PRODUCT_NAME: SpartanPortMemoryHost
         INFOPLIST_FILE: SpartanPortMemoryHost/Info.plist
         CODE_SIGN_ENTITLEMENTS: SpartanPortMemoryHost/MemoryHost.entitlements
