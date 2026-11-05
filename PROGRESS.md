@@ -78,6 +78,41 @@ file is still required (see §4).
 - MoltenVK portability is enabled (`VK_KHR_portability_enumeration` +
   `VK_KHR_portability_subset`, static `vkGetInstanceProcAddr`). Without it
   `vkEnumeratePhysicalDevices` returns zero.
+- The JIT helper probes `127.0.0.1` and the device's own IPv4 addresses for
+  `lockdownd:62078` before falling back to LocalDevVPN's `10.7.0.1`. If iOS 27
+  answers on a direct address, a session needs no LocalDevVPN; the helper's
+  `[SpartanPortJIT] lockdown endpoint ...` line and response message record
+  which route was used.
+
+### LocalDevVPN: why it cannot simply be bundled
+
+LocalDevVPN is not a service that can be copied into the app: it is a
+**Network Extension packet-tunnel provider**. Its `TunnelProv.entitlements`
+requests:
+
+```xml
+<key>com.apple.developer.networking.networkextension</key>
+<array><string>packet-tunnel-provider</string></array>
+<key>com.apple.developer.networking.vpn.api</key>
+<array><string>allow-vpn</string></array>
+```
+
+Apple grants those through the provisioning profile. A free/personal-team
+sideload profile does not include them, so an embedded VPN provider would make
+the whole app fail to install/sign. The provider also works by reflecting the
+packets for `10.7.0.1:62078` back into the device's own stack (see
+`PacketTunnelProvider.setPackets()`), not by proxying to a normal socket.
+
+Therefore the options are:
+
+1. **Direct endpoint** (implemented): if loopback or the device's Wi-Fi/
+   cellular address answers, LocalDevVPN is not needed at all.
+2. **Keep LocalDevVPN** for the tunnel route.
+3. **Embed an equivalent packet tunnel** only for a paid developer account
+   whose profile enables Network Extensions; this needs a separate,
+   entitlement-carrying build and is not usable with a free sideload profile.
+4. **TrollStore** installs can enable JIT without a debugger, but that is a
+   different installation path.
 
 ### Not proven
 
@@ -147,6 +182,8 @@ fix path.
 
 | Date (UTC) | Run | Workflow | Commit | Result | What it proved / fixed |
 |---|---|---|---|---|---|
+| 2026-11-05 14:27 | 42045213647 | Build iOS GPU app | `86578d8` | ❌ | Cancelled before steps ran (no logs); endpoint code is in the green CPU build, GPU redispatch pending |
+| 2026-11-05 16:?? | [42044375876](https://github.com/itsonewi/gow3_android/actions/runs/42044375876) | Build iOS IPA | `86578d8` | ✅ | CPU with direct loopback/own-address probe |
 | 2026-11-05 13:59 | [42040743104](https://github.com/itsonewi/gow3_android/actions/runs/42040743104) | Build iOS IPA | `40e28fc` | ✅ | CPU IPA + dSYM; built-in JIT bundled; 30 tests pass |
 | 2026-11-05 13:37 | [42037347032](https://github.com/itsonewi/gow3_android/actions/runs/42037347032) | Build iOS GPU app | `79a012f` | ✅ | GPU IPA with helper + StikJIT + MoltenVK portability |
 | 2026-11-05 13:34 | [42036574857](https://github.com/itsonewi/gow3_android/actions/runs/42036574857) | Build iOS IPA | `79a012f` | ✅ | First green CPU build with built-in helper |
@@ -163,6 +200,9 @@ Earlier history (before this table) is in `git log --oneline`.
 
 ## 6. Change log (newest first)
 
+- **2026-11-05** — Built-in JIT helper probes loopback and the device's own IPv4
+  addresses for `lockdownd:62078` before LocalDevVPN; documents why a bundled
+  packet tunnel needs the Network Extension entitlement.
 - **2026-11-05** — Built-in StikJIT: `SpartanPortJITHelper.appex`, JSON host,
   pairing store, Picker/import UI, framework embedded; Xcode 26 interface patch.
 - **2026-11-05** — GPU app compiles real SDL3 `runtime_pad.c` /
@@ -214,7 +254,9 @@ required. FEX must be the `ios-port-2607` branch, not `main`.
 ## 9. Next steps (suggested order)
 
 1. Device run of `SpartanPortGPU.ipa` on iOS 27; capture `[jit]`, `GPU:`,
-   `VideoOut:` and any crash report.
+   `VideoOut:` and any crash report. Check `[SpartanPortJIT] lockdown endpoint ...`:
+   if it says `10.7.0.1`, the device needs LocalDevVPN or an entitlement-carrying
+   embedded tunnel.
 2. Fix the first GPU/MoltenVK feature assertion if it aborts (log says which).
 3. Add in-app pairing (Madeira's Rust `rppairing` + `JITPairing.swift`) so no
    computer/StikDebug is needed at all.
