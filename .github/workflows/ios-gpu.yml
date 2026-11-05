@@ -78,4 +78,5 @@ jobs:
             out/gpu-ios/libspartanportgpu-all.a
             gpu-build.log
             dist-gpu/SpartanPortGPU-unsigned.ipa
+            ios/build-gpu/Build/Products/Release-iphoneos/*.dSYM
           if-no-files-found: warn

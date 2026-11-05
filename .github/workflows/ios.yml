@@ -162,6 +162,13 @@ jobs:
             dist/signing/README.txt
           if-no-files-found: error
 
+      - name: Upload dSYM
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpartanPort-dsym-${{ matrix.os }}
+          path: ios/build/Build/Products/Release-iphoneos/*.dSYM
+          if-no-files-found: ignore
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
