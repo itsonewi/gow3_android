@@ -14,9 +14,7 @@
 
 namespace Libraries::AvPlayer {
 
-AvPlayerSource::AvPlayerSource(AvPlayerStateCallback& state) {
-    (void)state;
-}
+AvPlayerSource::AvPlayerSource(AvPlayerStateCallback& state) : m_state(state) {}
 
 AvPlayerSource::~AvPlayerSource() = default;
 
@@ -87,6 +85,33 @@ u64 AvPlayerSource::CurrentTime() {
 
 bool AvPlayerSource::IsActive() {
     return false;
+}
+
+// The default destructor destroys the unique_ptr members, whose deleters are
+// these static functions. The FFmpeg translation unit that normally defines
+// them is not built on iOS, so the stand-in supplies no-op deleters.
+void AvPlayerSource::ReleaseAVPacket(AVPacket* packet) {
+    (void)packet;
+}
+
+void AvPlayerSource::ReleaseAVFrame(AVFrame* frame) {
+    (void)frame;
+}
+
+void AvPlayerSource::ReleaseAVCodecContext(AVCodecContext* context) {
+    (void)context;
+}
+
+void AvPlayerSource::ReleaseSWRContext(SwrContext* context) {
+    (void)context;
+}
+
+void AvPlayerSource::ReleaseSWSContext(SwsContext* context) {
+    (void)context;
+}
+
+void AvPlayerSource::ReleaseAVFormatContext(AVFormatContext* context) {
+    (void)context;
 }
 
 } // namespace Libraries::AvPlayer
