@@ -105,14 +105,18 @@ The iOS port lives in [`ios/`](ios/README.md). It is a native app, not a wrapper
 the runtime is rebuilt as Mach-O and the game's x86-64 code runs on FEXCore, with
 the JIT and memory layer from [Madeira](https://github.com/willfaust/Madeira).
 
-What runs today: the StikDebug JIT pool (BRK `#0xf00d`, RW alias, no-footprint),
-Memory+ entitlements and the 512 GB address map, the guest's user window, the
-stock loader/HLE, and FEXCore starting the guest. The Vulkan/MoltenVK renderer
-is still a stub, so a session stops at the first graphics call; the app says so in
-its Runtime card and log instead of pretending otherwise.
+What is built today: the StikDebug **or built-in StikJIT** JIT pool (BRK
+`#0xf00d`, RW alias, no-footprint), Memory+ entitlements and the 512 GB address
+map, the guest's user window, the stock loader/HLE, FEXCore starting the guest,
+and the shadPS4 → Vulkan → MoltenVK renderer (with SDL3 pad/audio and ATRAC9).
+The CPU-only app still stops at the first graphics call; the GPU app
+(`SpartanPortGPU.ipa`) creates the Metal surface and Vulkan device. A real device
+run is the current step — see [`PROGRESS.md`](PROGRESS.md) for the live state,
+workflow log and known gaps (touch input, FFmpeg movies/MP3, pairing generation).
 
-The build is an unsigned IPA from `.github/workflows/ios.yml` (macOS runner, FEXCore
-built first). The prepared folder (`boot.bin`) must be made on a computer with
+The build is an unsigned IPA from `.github/workflows/ios.yml` (CPU) or
+`.github/workflows/ios-gpu.yml` (GPU; macOS runner, FEXCore built first). The
+prepared folder (`boot.bin`) must be made on a computer with
 `scripts/prepare.py`, because iOS cannot run the Python preparation step.
 
 ## Download and play
