@@ -130,17 +130,20 @@ The `SpartanPortGPU` target in `ios/project.yml` is already wired:
 
 ## What still has to be validated on a device
 
-- MoltenVK's Vulkan 1.3 feature set against shadPS4's requirements (descriptor
-  indexing, buffer device address, transform feedback, conditional rendering,
-  depth clip, stencil export, 16-bit storage). The renderer requests what it
-  needs in `vk_platform.cpp`/`vk_instance.cpp`; whichever extension is missing
-  is reported there.
+- MoltenVK is a portability implementation: `vk_platform.cpp` requests
+  `VK_KHR_portability_enumeration` with the enumerate-portability create flag,
+  `vk_instance.cpp` enables `VK_KHR_portability_subset` when advertised, and the
+  instance dispatcher comes from the statically linked `vkGetInstanceProcAddr`
+  (there is no `libvulkan.dylib` in the bundle). Without those, MoltenVK
+  enumerates no physical device.
 - The GCN shader recompiler on ARM (it emits SPIR-V, so this is mostly
   correctness, not codegen).
-- SDL3 audio/gamepad on iOS; touch controls are a separate overlay job.
-- AvPlayer/FFmpeg: movies and the in-game player are silent/blank until an iOS
-  FFmpeg (or VideoToolbox) build replaces `shim/avplayer_stub.cpp`. The game's
-  VideoOut path itself is independent of it.
+- SDL3 gamepad and audio are compiled into the GPU app (`runtime_pad.c`,
+  `runtime_audio.c`); a touch overlay for iPhone is still to do.
+- ATRAC9 is decoded by the vendored LibAtrac9 (`runtime_ajm.c`); MP3 still needs
+  FFmpeg. AvPlayer/FFmpeg movies remain blank until an iOS FFmpeg (or
+  VideoToolbox) build replaces `shim/avplayer_stub.cpp`. The game's VideoOut path
+  itself is independent of it.
 - Performance and the 5 GiB guest pool against the device's jetsam limit.
 
 ## Status
@@ -148,15 +151,18 @@ The `SpartanPortGPU` target in `ios/project.yml` is already wired:
 | Piece | State |
 |---|---|
 | Metal surface / iOS window | written (`window_ios.mm`) |
+| MoltenVK portability + static dispatch | written |
 | SDL text/pixel-density and refresh-rate guards | written |
 | FSR / frame-generation stubs | written |
-| FFmpeg PNG/trophy/AvPlayer stubs | written |
+| FFmpeg PNG/trophy/AvPlayer/MP3 stubs | written |
+| SDL3 pad + audio HLE in the GPU app | **compiled in** |
+| ATRAC9 (libSceAjm) | **compiled in** (LibAtrac9) |
 | `SPARTAN_IOS` CMake branch | **green on `macos-15`** |
 | `build-gpu-ios.sh` (SDL3, Zydis, MoltenVK, libtool archive) | **green** |
 | `SpartanPortGPU` app target + IPA | **green** (`spartanport-ios-gpu`) |
 | First device run / feature validation | to do |
 
-The workflow artifact contains `dist-gpu/SpartanPortGPU-unsigned.ipa`
-(17.3 MB arm64 executable) and the combined static archive. The app binary
-contains the Metal surface, MoltenVK and the shadPS4 shader recompiler; only a
+The workflow artifact contains `dist-gpu/SpartanPortGPU-unsigned.ipa` and the
+combined static archive. The app binary contains the Metal surface, MoltenVK,
+the shadPS4 shader recompiler, SDL3 pad/audio and the ATRAC9 decoder; only a
 device can confirm the advertised Vulkan features and the Metal presentation.

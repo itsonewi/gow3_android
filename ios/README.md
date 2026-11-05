@@ -16,7 +16,7 @@ Linux/glibc ELF, so the runtime is rebuilt as Mach-O inside the app:
 | PS4 memory, loader, kernel HLE | stock `src/runtime_*.c` + `src/probe.c`, built by the app | compiled in |
 | CPU: FEXCore on the JIT pool | `Runtime/cpu/` | compiled in |
 | GPU: shadPS4 → Vulkan → MoltenVK | `gpu/`, `out/gpu-ios/libspartanportgpu-all.a` | **linked** (device run pending) |
-| Audio/video/pad: SDL3/FFmpeg | SDL3 linked; FFmpeg and pad mapping | **partial** |
+| Audio/video/pad: SDL3/LibAtrac9/FFmpeg | SDL3 pad+audio and ATRAC9 compiled in; MP3/movies need FFmpeg | **partial** |
 
 A run therefore goes: JIT pool → guest memory → prepared `boot.bin` → imports
 resolved from the HLE → FEXCore starts → the game's entry point runs → the GPU
@@ -170,10 +170,13 @@ the Stop button only reports the request.
 ## Next
 
 * **Device validation of the GPU app**: MoltenVK device/features, Metal surface,
-  the GCN shader path, then presents and frame pacing.
-* **Audio/video/pad**: an iOS FFmpeg build (H.264/AAC) to replace
-  `shim/avplayer_stub.cpp`, SDL3 audio output, the gamepad backend, and the
-  touch overlay.
+  the GCN shader path, then presents and frame pacing. The GPU app now enables
+  MoltenVK's portability instance/device extensions and takes
+  `vkGetInstanceProcAddr` from the statically linked library.
+* **Remaining media/touch work**: an iOS FFmpeg build (H.264/AAC/MP3) to replace
+  `shim/avplayer_stub.cpp` and the MP3 half of `runtime_ajm.c`; a touch overlay
+  for iPhone. SDL3 pad and audio, and the ATRAC9 decoder, are compiled into the
+  GPU app.
 * **Launcher parity**: the Python launcher's settings, patches and save import
   would move into the SwiftUI cards.
 
