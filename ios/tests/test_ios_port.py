@@ -202,7 +202,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME", platform)
         self.assertIn("eEnumeratePortabilityKHR", platform)
         # The statically linked MoltenVK has no libvulkan.dylib to dlopen.
-        self.assertIn("::vkGetInstanceProcAddr", platform)
+        self.assertIn("vkGetInstanceProcAddr", platform)
         # When advertised, VK_KHR_portability_subset must be enabled.
         self.assertIn("VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME", instance)
 

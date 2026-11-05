@@ -23,6 +23,13 @@
 #include "sdl_window.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 
+#if defined(__APPLE__)
+// vulkan.hpp is built with VK_NO_PROTOTYPES here (the dispatcher is dynamic),
+// but MoltenVK is linked statically, so its entry point is available directly.
+extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance,
+                                                                         const char*);
+#endif
+
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -268,7 +275,7 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
     // MoltenVK is linked statically into the app: use its exported entry point
     // directly. The desktop loader-based DynamicLoader would dlopen a
     // libvulkan.dylib that does not exist in the bundle.
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(::vkGetInstanceProcAddr);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 #else
     static vk::detail::DynamicLoader dl;
     VULKAN_HPP_DEFAULT_DISPATCHER.init(
