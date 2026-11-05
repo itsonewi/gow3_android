@@ -60,9 +60,13 @@ static size_t buffers_out, ports_opened;
 
 static uint64_t now_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return (uint64_t)t.tv_sec*1000000000u+(uint64_t)t.tv_nsec; }
 static void sleep_until(uint64_t deadline) {
-#ifdef _WIN32
-    /* winpthreads' clock_nanosleep only takes CLOCK_REALTIME (EINVAL otherwise). */
-    for (uint64_t now=now_ns(); now<deadline; now=now_ns()) compat_sleep_ns(deadline-now);
+#if defined(_WIN32) || defined(__APPLE__)
+    /* Darwin has no clock_nanosleep; winpthreads' only takes CLOCK_REALTIME. */
+    for (uint64_t now=now_ns(); now<deadline; now=now_ns()) {
+        const uint64_t left=deadline-now;
+        struct timespec t={(time_t)(left/1000000000u),(long)(left%1000000000u)};
+        nanosleep(&t,NULL);
+    }
 #else
     struct timespec t={(time_t)(deadline/1000000000u),(long)(deadline%1000000000u)};
     while (clock_nanosleep(CLOCK_MONOTONIC,TIMER_ABSTIME,&t,NULL)) {}
