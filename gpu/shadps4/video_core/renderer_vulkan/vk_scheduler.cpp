@@ -406,7 +406,7 @@ void Scheduler::RecorderThread(std::stop_token stoken) {
         {
             std::unique_lock lk{recorder_mutex};
             recorder_sleeping = true;
-            recorder_cv.wait(lk, stoken, [this] { return !recorder_queue.empty(); });
+            Common::CondvarWait(recorder_cv, lk, stoken, [this] { return !recorder_queue.empty(); });
             recorder_sleeping = false;
             if (recorder_queue.empty()) {
                 return; // stop requested
@@ -613,8 +613,8 @@ void Scheduler::PriorityPendingOpsThread(std::stop_token stoken) {
         PendingOp op;
         {
             std::unique_lock lk(priority_pending_ops_mutex);
-            priority_pending_ops_cv.wait(lk, stoken,
-                                         [this] { return !priority_pending_ops.empty(); });
+            Common::CondvarWait(priority_pending_ops_cv, lk, stoken,
+                                [this] { return !priority_pending_ops.empty(); });
             if (stoken.stop_requested()) {
                 break;
             }
