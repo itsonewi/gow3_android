@@ -13,9 +13,10 @@ touching the Vulkan code.
 
 The bad news: this library was written for Windows/Linux, and the iOS build has
 to supply the pieces those systems get from packages (MoltenVK, SDL3, Zydis,
-fmt, xxhash, VMA, ...). The CMake branch exists (`-DSPARTAN_IOS=ON`) but has not
-been run on a Mac yet. Treat the commands below as the build recipe to iterate
-on, not as a verified green build.
+fmt, xxhash, VMA, ...). The `-DSPARTAN_IOS=ON` branch now compiles and links:
+`.github/workflows/ios-gpu.yml` produces `SpartanPortGPU-unsigned.ipa` and
+`libspartanportgpu-all.a` on `macos-15`. Running it on a device is the next
+phase; the recipe below is what the CI script executes.
 
 ## What the iOS branch changes
 
@@ -23,12 +24,22 @@ on, not as a verified green build.
   frameworks, and makes `spartanportgpu` a static library.
 - `shim/window.cpp` (SDL window) is replaced by `shim/window_ios.mm`.
 - X11/Wayland are skipped.
-- AMD FidelityFX is skipped: `fsr_driver.cpp` is excluded and
-  `shim/fsr_stub.cpp` reports FSR unavailable. The in-game menu disables the FSR
-  entries (TAA and the port's other paths still work).
-- FFmpeg is skipped: `spartanport_png.cpp` and `spartanport_trophy_media.cpp`
-  are replaced by `shim/ios_stub.cpp`. Trophy icons and save-list pictures are
-  blank; the game's VideoOut path does not use FFmpeg.
+- AMD FidelityFX is skipped: `fsr_driver.cpp`, `vk_fsr4.cpp` and
+  `vk_frame_generation.cpp` are excluded and `shim/fsr_stub.cpp` /
+  `shim/frame_generation_stub.cpp` report FSR unavailable. The in-game menu
+  disables the FSR entries (TAA and the port's other paths still work).
+- FFmpeg is skipped: `spartanport_png.cpp`, `spartanport_trophy_media.cpp`,
+  `avplayer_source.cpp`, `avplayer_file_streamer.cpp` and `video_utils.cpp` are
+  excluded. `shim/ios_stub.cpp` blanks the PNG/trophy clients and
+  `shim/avplayer_stub.cpp` answers "no source" for movies; the HLE entry points
+  still exist so the guest gets an error instead of a missing import. The scene
+  renderer does not use libav.
+- Apple libc++ has no `std::jthread`/`stop_token`; the renderer uses the
+  `common/polyfill_thread.h` shim, including `Common::CondvarWait` for
+  `condition_variable_any` waits.
+- The overlay fonts are embedded with Mach-O assembler syntax on Apple
+  (`__TEXT,__const`, leading-underscore symbols) instead of the ELF `.rodata`
+  block.
 - Everything from `renderer_vulkan` onwards (shader recompiler, Gnm driver,
   VideoOut, presenter, ImGui overlay) is the same code the Android build runs.
 
@@ -127,8 +138,9 @@ The `SpartanPortGPU` target in `ios/project.yml` is already wired:
 - The GCN shader recompiler on ARM (it emits SPIR-V, so this is mostly
   correctness, not codegen).
 - SDL3 audio/gamepad on iOS; touch controls are a separate overlay job.
-- FFmpeg stubs: trophy/save pictures and the in-game movie picture are blank
-  until a VideoToolbox-backed decoder replaces them.
+- AvPlayer/FFmpeg: movies and the in-game player are silent/blank until an iOS
+  FFmpeg (or VideoToolbox) build replaces `shim/avplayer_stub.cpp`. The game's
+  VideoOut path itself is independent of it.
 - Performance and the 5 GiB guest pool against the device's jetsam limit.
 
 ## Status
@@ -137,9 +149,14 @@ The `SpartanPortGPU` target in `ios/project.yml` is already wired:
 |---|---|
 | Metal surface / iOS window | written (`window_ios.mm`) |
 | SDL text/pixel-density and refresh-rate guards | written |
-| FSR stub | written |
-| FFmpeg PNG/trophy stubs | written |
-| `SPARTAN_IOS` CMake branch | written, **not yet built on macOS** |
-| `build-gpu-ios.sh` (SDL3, Zydis, MoltenVK, libtool archive) | written, **not yet run** |
-| `SpartanPortGPU` app target | written |
+| FSR / frame-generation stubs | written |
+| FFmpeg PNG/trophy/AvPlayer stubs | written |
+| `SPARTAN_IOS` CMake branch | **green on `macos-15`** |
+| `build-gpu-ios.sh` (SDL3, Zydis, MoltenVK, libtool archive) | **green** |
+| `SpartanPortGPU` app target + IPA | **green** (`spartanport-ios-gpu`) |
 | First device run / feature validation | to do |
+
+The workflow artifact contains `dist-gpu/SpartanPortGPU-unsigned.ipa`
+(17.3 MB arm64 executable) and the combined static archive. The app binary
+contains the Metal surface, MoltenVK and the shadPS4 shader recompiler; only a
+device can confirm the advertised Vulkan features and the Metal presentation.

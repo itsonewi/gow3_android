@@ -15,13 +15,14 @@ Linux/glibc ELF, so the runtime is rebuilt as Mach-O inside the app:
 | Memory+: entitlements, 512 GB map, donation extension | `SpartanPort/Resources/`, `SpartanPortMemoryHost/` | implemented |
 | PS4 memory, loader, kernel HLE | stock `src/runtime_*.c` + `src/probe.c`, built by the app | compiled in |
 | CPU: FEXCore on the JIT pool | `Runtime/cpu/` | compiled in |
-| GPU: shadPS4 → Vulkan → MoltenVK | not linked yet | **stub** |
-| Audio/video/pad: SDL3/FFmpeg | not linked yet | **stub** |
+| GPU: shadPS4 → Vulkan → MoltenVK | `gpu/`, `out/gpu-ios/libspartanportgpu-all.a` | **linked** (device run pending) |
+| Audio/video/pad: SDL3/FFmpeg | SDL3 linked; FFmpeg and pad mapping | **partial** |
 
 A run therefore goes: JIT pool → guest memory → prepared `boot.bin` → imports
-resolved from the HLE → FEXCore starts → the game's entry point runs → it stops
-at the first graphics call, which the GPU stub logs. That is the honest state of
-this tree; the Play card's CPU-only switch is what starts it.
+resolved from the HLE → FEXCore starts → the game's entry point runs → the GPU
+app creates its Metal surface and Vulkan device through MoltenVK. The CPU-only
+app still stops at the first graphics call, which the stub logs; the Play card's
+CPU-only switch decides which one starts.
 
 ## The JIT layer
 
@@ -94,10 +95,22 @@ MoltenVK), combines it with SDL3/Zydis/fmt/xxhash/MoltenVK into
 `out/gpu-ios/libspartanportgpu-all.a`, and `--app` builds the `SpartanPortGPU`
 scheme. That target defines `SPARTANPORT_GPU`, links the archive, and starts the
 loader without `--cpu-only`, so the real `spartanportgpu_*` symbols (which
-override the weak stubs) create the CAMetalLayer and the Vulkan device. See
-[`gpu/README-ios.md`](../gpu/README-ios.md) for the dependency recipe and what
-still has to be validated on a device; this build has not been run on a Mac from
-this checkout yet.
+override the weak stubs) create the CAMetalLayer and the Vulkan device.
+
+`.github/workflows/ios-gpu.yml` runs that script on `macos-15` and publishes the
+`spartanport-ios-gpu` artifact (`SpartanPortGPU-unsigned.ipa` plus the static
+archive). The build is green; running it on a device is the next step. See
+[`gpu/README-ios.md`](../gpu/README-ios.md) for the dependency recipe, the iOS
+shims and what still has to be validated.
+
+Two pieces are deliberately outside the current GPU build:
+
+* **AvPlayer** (`gpu/shim/avplayer_stub.cpp`): its source and file streamer are
+  libav clients, and there is no iOS FFmpeg yet. The HLE entry points exist, but
+  movie playback returns "no source". The scene renderer does not depend on it.
+* **FSR 4 / frame generation** (`gpu/shim/fsr_stub.cpp`,
+  `frame_generation_stub.cpp`): the FFX provider is a desktop driver component;
+  the menu reports them unavailable and the game's own TAA still works.
 
 ## Installing and preparing the game
 
@@ -129,11 +142,14 @@ holds both is fine.
 1. Enable JIT (StikDebug + LocalDevVPN + pairing file).
 2. Allocate the pool (128–896 MB; 512 MB is a good start).
 3. Import the prepared folder.
-4. Play. The build is CPU-only: the Play card says so, and the log shows the
+4. Play. The CPU app is CPU-only: the Play card says so, and the log shows the
    runtime's own lines prefixed `[runtime]` — the loader's `Mapped N bytes…`,
    FEXCore startup, then the first missing HLE import (normally the first
-   graphics call). The stock loader exits at that point; there is no GPU to
-   present a frame yet.
+   graphics call). The stock loader exits at that point.
+   The GPU app (`SpartanPortGPU.ipa`) links the shadPS4/MoltenVK renderer and
+   starts the loader without `--cpu-only`, so it proceeds to the Metal surface
+   and Vulkan device; that path still needs device validation. Movies are the
+   known gap (AvPlayer is stubbed until an iOS FFmpeg build exists).
 
 A fatal runtime error still calls `exit()` as it does on every platform; iOS
 then ends the app. There is no safe unwind point for FEX and guest threads, so
@@ -153,12 +169,11 @@ the Stop button only reports the request.
 
 ## Next
 
-* **GPU**: build the shadPS4 video core and MoltenVK for iOS and replace
-  `Runtime/gpu/sp_gpu_stub.c`; the stock `SpartanGpuConfig`/`spartanportgpu_init`
-  interface is already what the loader calls. SDL3 has an iOS backend for the
-  window/surface; MoltenVK provides Vulkan 1.3.
-* **Audio/video/pad**: SDL3 audio and gamepad backends, FFmpeg/VideoToolbox for
-  `runtime_videodec.c`, and the touch overlay.
+* **Device validation of the GPU app**: MoltenVK device/features, Metal surface,
+  the GCN shader path, then presents and frame pacing.
+* **Audio/video/pad**: an iOS FFmpeg build (H.264/AAC) to replace
+  `shim/avplayer_stub.cpp`, SDL3 audio output, the gamepad backend, and the
+  touch overlay.
 * **Launcher parity**: the Python launcher's settings, patches and save import
   would move into the SwiftUI cards.
 
