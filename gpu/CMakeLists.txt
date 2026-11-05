@@ -208,8 +208,11 @@ set(COMMON
 file(GLOB AVPLAYER CONFIGURE_DEPENDS shadps4/core/libraries/avplayer/*.cpp)
 if (SPARTAN_IOS)
     # No libav* on iOS: the two FFmpeg clients (PNG and trophy media) are
-    # replaced by shim/ios_stub.cpp. The rest of the renderer does not use it.
+    # replaced by shim/ios_stub.cpp. AvPlayer's source and file streamer are
+    # also libav clients, so they give way to shim/avplayer_stub.cpp.
     set(SPARTAN_FFMPEG "")
+    list(FILTER AVPLAYER EXCLUDE REGEX "avplayer_source\\.cpp$")
+    list(FILTER AVPLAYER EXCLUDE REGEX "avplayer_file_streamer\\.cpp$")
 else()
     pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil libswscale libswresample)
     set(SPARTAN_FFMPEG PkgConfig::FFMPEG)
@@ -225,6 +228,9 @@ if (SPARTAN_IOS)
     list(APPEND SHIM_SOURCES shim/window_ios.mm shim/fsr_stub.cpp shim/ios_stub.cpp
         shim/frame_generation_stub.cpp)
     set_source_files_properties(shim/window_ios.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+else()
+    # The iOS AvPlayer stand-in would duplicate the real FFmpeg implementation.
+    list(FILTER SHIM_SOURCES EXCLUDE REGEX "avplayer_stub\\.cpp$")
 endif()
 # Windows: a DLL cannot leave the runtime_* symbols for spartanport-probe.exe to resolve, so the
 # library is static there and linked into the executable. iOS is static for the same reason.
