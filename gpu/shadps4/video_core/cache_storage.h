@@ -4,6 +4,7 @@
 #pragma once
 
 #include "common/path_util.h"
+#include "common/polyfill_thread.h"
 #include "common/singleton.h"
 #include "common/types.h"
 

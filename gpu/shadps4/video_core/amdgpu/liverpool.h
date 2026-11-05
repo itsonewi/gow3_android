@@ -18,6 +18,7 @@
 #include <queue>
 
 #include "common/assert.h"
+#include "common/polyfill_thread.h"
 #include "common/slot_vector.h"
 #include "common/types.h"
 #include "common/unique_function.h"

@@ -105,6 +105,8 @@ if [[ ! -f "$MOLTEN/include/vulkan/vulkan.h" ]]; then
     [[ -d "$VK" ]] || git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers "$VK"
     mkdir -p "$MOLTEN/include"
     cp -R "$VK/include/vulkan" "$MOLTEN/include/"
+    # vulkan_core.h includes <vk_video/...> for the video codecs.
+    cp -R "$VK/include/vk_video" "$MOLTEN/include/"
 fi
 
 # VulkanMemoryAllocator is a header the CMake build looks for as vma/vk_mem_alloc.h.
