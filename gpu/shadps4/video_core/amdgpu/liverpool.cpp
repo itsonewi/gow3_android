@@ -114,6 +114,12 @@ void Liverpool::Process(std::stop_token stoken) {
     gpu_id = std::this_thread::get_id();
 #if defined(__linux__) || defined(_WIN32)
     gpu_tid = gettid();
+#elif defined(__APPLE__)
+    // Darwin has no gettid(): the same id the iOS shim's gettid() reports.
+    u64 host_tid = 0;
+    if (pthread_threadid_np(nullptr, &host_tid) == 0) {
+        gpu_tid = static_cast<u32>(host_tid);
+    }
 #endif
 
     while (!stoken.stop_requested()) {
