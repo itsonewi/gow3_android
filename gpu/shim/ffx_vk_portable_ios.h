@@ -27,11 +27,21 @@ static constexpr unsigned int FFX_VK_PORTABLE_OK = 0;
 static constexpr unsigned int FFX_VK_PORTABLE_CONTEXT_HDR_COLOR_INPUT = 1u << 0;
 static constexpr unsigned int FFX_VK_PORTABLE_CONTEXT_AUTO_EXPOSURE = 1u << 1;
 
+struct FfxVkPortableSize2D {
+    unsigned int width;
+    unsigned int height;
+};
+
+struct FfxVkPortableFloat2 {
+    float x;
+    float y;
+};
+
 struct FfxVkPortableImage {
     unsigned int structSize;
     VkImage image;
     VkFormat format;
-    unsigned int extent[2];
+    FfxVkPortableSize2D extent;
     unsigned int mipCount;
     unsigned int arrayLayers;
     VkImageUsageFlags usage;
@@ -56,8 +66,8 @@ struct FfxVkPortableDeviceInfo {
 struct FfxVkPortableUpscaleCreateInfo {
     unsigned int structSize;
     unsigned int flags;
-    unsigned int maxRenderSize[2];
-    unsigned int maxOutputSize[2];
+    FfxVkPortableSize2D maxRenderSize;
+    FfxVkPortableSize2D maxOutputSize;
 };
 
 struct FfxVkPortableUpscaleDispatchInfo {
@@ -70,10 +80,10 @@ struct FfxVkPortableUpscaleDispatchInfo {
     FfxVkPortableImage exposure;
     FfxVkPortableImage reactiveMask;
     FfxVkPortableImage transparencyAndCompositionMask;
-    float jitterOffset[2];
-    float motionVectorScale[2];
-    unsigned int renderSize[2];
-    unsigned int outputSize[2];
+    FfxVkPortableFloat2 jitterOffset;
+    FfxVkPortableFloat2 motionVectorScale;
+    FfxVkPortableSize2D renderSize;
+    FfxVkPortableSize2D outputSize;
     float frameTimeMilliseconds;
     float preExposure;
     float cameraNear;
