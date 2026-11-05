@@ -193,6 +193,19 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(IOS, "scripts", "build-gpu-ios.sh")))
         self.assertTrue(os.path.exists(os.path.join(ROOT, "gpu", "README-ios.md")))
 
+    def test_moltenvk_is_a_portability_implementation(self):
+        render = os.path.join(ROOT, "gpu", "shadps4", "video_core", "renderer_vulkan")
+        platform = open(os.path.join(render, "vk_platform.cpp"), encoding="utf-8").read()
+        instance = open(os.path.join(render, "vk_instance.cpp"), encoding="utf-8").read()
+        # Without the portability instance extension and create flag, MoltenVK
+        # enumerates no physical device on iOS.
+        self.assertIn("VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME", platform)
+        self.assertIn("eEnumeratePortabilityKHR", platform)
+        # The statically linked MoltenVK has no libvulkan.dylib to dlopen.
+        self.assertIn("::vkGetInstanceProcAddr", platform)
+        # When advertised, VK_KHR_portability_subset must be enabled.
+        self.assertIn("VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME", instance)
+
     def test_gpu_cmake_branch(self):
         cmake = open(os.path.join(ROOT, "gpu", "CMakeLists.txt"), encoding="utf-8").read()
         for marker in ("SPARTAN_IOS", "window_ios.mm", "fsr_stub.cpp", "ios_stub.cpp",
