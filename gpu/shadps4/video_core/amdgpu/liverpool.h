@@ -194,7 +194,7 @@ public:
         return gpu_id;
     }
 
-#if defined(__linux__) || defined(_WIN32)
+#if defined(__linux__) || defined(_WIN32) || defined(__APPLE__)
     u32 GetGpuCommandProcessorThreadId() {
         return gpu_tid;
     }
