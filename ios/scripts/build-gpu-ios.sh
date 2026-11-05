@@ -74,6 +74,18 @@ cmake -S "$ZY_SRC" -B "$DEPS/zydis-build" -G Ninja \
     -DZYDIS_BUILD_MAN=OFF -DZYDIS_BUILD_SHARED_LIB=OFF
 cmake --build "$DEPS/zydis-build" --parallel "$JOBS" --target install
 
+# Zydis's CMake config depends on Zycore; when Zydis is a subproject its install
+# does not always carry Zycore's package, so install it explicitly.
+if [[ ! -f "$PREFIX/lib/cmake/zycore/zycore-config.cmake" &&
+      ! -f "$PREFIX/lib/cmake/Zycore/ZycoreConfig.cmake" ]]; then
+    cmake -S "$ZY_SRC/dependencies/zycore" -B "$DEPS/zycore-build" -G Ninja \
+        -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 \
+        -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+        -DZYCORE_BUILD_SHARED_LIB=OFF
+    cmake --build "$DEPS/zycore-build" --parallel "$JOBS" --target install
+fi
+
 # --- MoltenVK + Vulkan headers ---------------------------------------------
 MOLTEN="$DEPS/moltenvk"
 if [[ ! -f "$MOLTEN/lib/libvulkan.a" ]]; then
