@@ -13,6 +13,10 @@ private struct DDIPaths {
 private enum StikJIT {
     enum Script { case customBase64(String) }
     struct DeviceSecurityState { let isTXMPresent: Bool? }
+    struct Configuration {
+        init(deviceAddress: String = "10.7.0.1", rsdPort: UInt16 = 49152,
+             connectionTimeout: TimeInterval = 5) {}
+    }
     enum PreparationStage { case unavailable }
     enum JITReadiness {
         case unreachable(reason: String)
@@ -21,10 +25,12 @@ private enum StikJIT {
     }
     static var isTXMPresent: Bool? { nil }
     static func prepareDevice(pairingFile: URL, paths: DDIPaths,
+                              configuration: Configuration = .init(),
                               progress: (PreparationStage) -> Void) -> JITReadiness {
         .unreachable(reason: "Built-in JIT is available only on a physical device.")
     }
     static func enableJIT(targetPID: Int32, pairingFile: URL, ddiPaths: DDIPaths,
+                          configuration: Configuration = .init(),
                           script: Script, forceScript: Bool,
                           preparationProgress: (PreparationStage) -> Void,
                           progress: (String) -> Void) throws {
@@ -59,15 +65,19 @@ private enum SpartanPortJITWork {
             try pairingData.write(to: pairingURL, options: .atomic)
             defer { try? manager.removeItem(at: pairingURL) }
 
+            let endpoint = SpartanPortEndpoint.choose()
+            let configuration = StikJIT.Configuration(deviceAddress: endpoint.host)
+            NSLog("[SpartanPortJIT] lockdown endpoint %@ (%@)", endpoint.host, endpoint.note)
+
             switch request.operation {
             case .prepare:
                 let readiness = StikJIT.prepareDevice(
-                    pairingFile: pairingURL, paths: paths,
+                    pairingFile: pairingURL, paths: paths, configuration: configuration,
                     progress: { NSLog("[SpartanPortJIT] prepare: %@", String(describing: $0)) })
                 switch readiness {
                 case .ready(let security):
                     return .init(success: true,
-                                 message: "LocalDevVPN is reachable and the Developer Disk Image is ready.",
+                                 message: "Reached lockdown via \(endpoint.note); the Developer Disk Image is ready.",
                                  txmPresent: security.isTXMPresent)
                 case .unreachable(let reason), .preparationFailed(let reason):
                     return .init(success: false, message: reason, txmPresent: StikJIT.isTXMPresent)
@@ -88,12 +98,13 @@ private enum SpartanPortJITWork {
                     targetPID: targetPID,
                     pairingFile: pairingURL,
                     ddiPaths: paths,
+                    configuration: configuration,
                     script: .customBase64(scriptBase64),
                     forceScript: true,
                     preparationProgress: { NSLog("[SpartanPortJIT] prepare: %@", String(describing: $0)) },
                     progress: { NSLog("[SpartanPortJIT] %@", $0) })
                 return .init(success: true,
-                             message: "SpartanPort detached cleanly from its built-in JIT helper.",
+                             message: "SpartanPort detached cleanly from its built-in JIT helper (via \(endpoint.note)).",
                              txmPresent: StikJIT.isTXMPresent)
             case .resetDDI:
                 preconditionFailure("Handled above")
