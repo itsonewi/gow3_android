@@ -180,7 +180,7 @@ targets:
           -Wl,-framework,AVFoundation -Wl,-framework,AudioToolbox
           -Wl,-framework,CoreAudio -Wl,-framework,GameController
           -Wl,-framework,CoreHaptics -Wl,-framework,CoreMotion
-          -Wl,-framework,CoreBluetooth
+          -Wl,-framework,CoreBluetooth -Wl,-framework,CoreMedia
         LIBRARY_SEARCH_PATHS:
           - "$(SRCROOT)/../out/gpu-ios"
           - "$(BUILT_PRODUCTS_DIR)"
