@@ -12,7 +12,6 @@
 #elif defined(__APPLE__)
 #include <pthread.h>
 #include <sys/types.h>
-#include <ucontext.h>
 #include <unistd.h>
 #else
 #include <ucontext.h>

@@ -31,6 +31,9 @@
 
 extern SpartanActorSlot spartanport_actor_slots[2];
 extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends this process
+#if defined(SPARTAN_IOS)
+extern "C" float sp_ios_display_scale(void);
+#endif
 #include "common/elf_info.h"
 #include "imgui.h"
 #include "imgui_internal.h" // RegisterUserTexture (save pictures)
@@ -247,7 +250,6 @@ void HeadingRule() {
 float PixelDensity(SDL_WindowID id) {
 #if defined(SPARTAN_IOS)
     // No SDL window on iOS: the Metal view is scaled by the screen.
-    extern "C" float sp_ios_display_scale(void);
     (void)id;
     return sp_ios_display_scale();
 #else

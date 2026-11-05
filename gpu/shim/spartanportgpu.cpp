@@ -182,9 +182,12 @@ std::condition_variable g_window_cv;
 bool g_window_ready;
 } // namespace
 
+#if defined(SPARTAN_IOS)
+extern "C" int sp_ios_display_refresh_hz(void);
+#endif
+
 u32 SpartanDisplayRefreshHz() {
 #if defined(SPARTAN_IOS)
-    extern "C" int sp_ios_display_refresh_hz(void);
     static const u32 hz = [] {
         const u32 rate = u32(std::max(60, sp_ios_display_refresh_hz()));
         std::printf("GPU: vblank follows the display refresh rate, %u Hz\n", rate);
