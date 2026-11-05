@@ -10,6 +10,7 @@
 #include <chrono>
 #include <thread>
 #include "common/arch.h"
+#include "common/polyfill_thread.h"
 #include "common/rdtsc.h"
 #include "common/thread.h"
 
