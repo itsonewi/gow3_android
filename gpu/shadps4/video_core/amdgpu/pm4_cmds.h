@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstring>
+#include <type_traits>
 #include "common/assert.h"
 #include "common/bit_field.h"
 #include "common/types.h"
@@ -761,10 +762,13 @@ struct PM4CmdWriteData {
 
     template <typename T>
     T Address() const {
-        // VAddr is uintptr_t; reinterpret_cast between integral types is not
-        // valid C++, and clang rejects it on arm64 (the x86 build got away
-        // with the conversion). static_cast handles both integers and pointers.
-        return static_cast<T>(addr64);
+        // VAddr is uintptr_t; clang rejects reinterpret_cast between integral
+        // types (the x86 build relied on it). Pointers still need reinterpret.
+        if constexpr (std::is_pointer_v<T>) {
+            return reinterpret_cast<T>(addr64);
+        } else {
+            return static_cast<T>(addr64);
+        }
     }
 };
 
