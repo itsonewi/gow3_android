@@ -103,6 +103,11 @@ int sp_jit_is_enabled(void);
 #define MAP_FIXED_NOREPLACE 0
 #endif
 
+/* Darwin spells the recursive mutex initializer without the _NP suffix. */
+#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP PTHREAD_RECURSIVE_MUTEX_INITIALIZER
+#endif
+
 /* glibc allocator tuning has no Darwin equivalent. */
 #define mallopt(...) ((void)0)
 #ifndef M_ARENA_MAX
