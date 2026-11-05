@@ -194,7 +194,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(ROOT, "gpu", "README-ios.md")))
 
     def test_gpu_app_uses_the_real_pad_and_audio(self):
-        sources = self.targets["SpartanPortGPU"]["sources"]
+        project = yaml.safe_load(open(os.path.join(IOS, "project.yml"), encoding="utf-8"))
+        sources = project["targets"]["SpartanPortGPU"]["sources"]
         paths = [s["path"] if isinstance(s, dict) else s for s in sources]
         self.assertIn("../src/runtime_pad.c", paths)
         self.assertIn("../src/runtime_audio.c", paths)
