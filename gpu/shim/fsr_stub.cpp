@@ -18,6 +18,7 @@
 namespace Vulkan {
 
 struct DriverFsrUpscaler::Impl {};
+struct Fsr4Upscaler::Impl {};
 
 DriverFsrUpscaler::DriverFsrUpscaler(vk::Device device, vk::PhysicalDevice physical,
                                      PFN_vkGetDeviceProcAddr get_proc)
