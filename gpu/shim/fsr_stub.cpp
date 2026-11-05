@@ -11,6 +11,7 @@
 // menu entries are disabled. This file is compiled only when SPARTAN_IOS is on.
 
 #include "video_core/renderer_vulkan/fsr_driver.h"
+#include "video_core/renderer_vulkan/vk_fsr4.h"
 
 #include <string>
 
@@ -46,6 +47,37 @@ const std::string& DriverFsrUpscaler::Problem() const {
 const std::string& DriverFsrUpscaler::Description() const {
     static const std::string description = "FSR 4";
     return description;
+}
+
+// Fsr4Upscaler (the FSR 4 model graph) is built from the same FFX provider and
+// the fetched shader assets; neither ships on iOS. vk_fsr4.cpp is excluded and
+// these definitions keep the presenter's option compiled in but unavailable.
+Fsr4Upscaler::Fsr4Upscaler(const Instance& instance, Scheduler& scheduler) {
+    (void)instance;
+    (void)scheduler;
+}
+
+Fsr4Upscaler::~Fsr4Upscaler() = default;
+
+bool Fsr4Upscaler::Record(const Frame& frame) {
+    (void)frame;
+    return false;
+}
+
+const char* Fsr4Upscaler::Problem() const noexcept {
+    return "FSR 4 is not available on iOS (AMD FidelityFX provider).";
+}
+
+bool Fsr4Upscaler::Fatal() const noexcept {
+    return true;
+}
+
+bool Fsr4Upscaler::DriverAvailable() const noexcept {
+    return false;
+}
+
+const char* Fsr4Upscaler::DriverProblem() const noexcept {
+    return "FSR 4 needs an AMD driver provider, which iOS does not have.";
 }
 
 } // namespace Vulkan
