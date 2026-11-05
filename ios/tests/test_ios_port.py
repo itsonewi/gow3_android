@@ -199,6 +199,8 @@ class RuntimeTests(unittest.TestCase):
         paths = [s["path"] if isinstance(s, dict) else s for s in sources]
         self.assertIn("../src/runtime_pad.c", paths)
         self.assertIn("../src/runtime_audio.c", paths)
+        self.assertIn("../src/runtime_ajm.c", paths)
+        self.assertIn("../third_party/LibAtrac9/C/src", paths)
         # The CPU app keeps the stubs, so they must be weak and overridable.
         stubs = read("Runtime", "hle", "sp_hle_stubs.c")
         self.assertIn("SP_WEAK uintptr_t runtime_pad_resolve", stubs)

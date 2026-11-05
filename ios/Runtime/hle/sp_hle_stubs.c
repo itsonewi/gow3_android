@@ -11,6 +11,8 @@
 
 #include <stdint.h>
 
+#include "runtime.h"
+
 /* Weak: the GPU app compiles the real SDL3 pad/audio modules, whose strong
  * definitions then override these. */
 #if defined(__APPLE__)
@@ -26,10 +28,26 @@ SP_WEAK uintptr_t runtime_pad_resolve(const char *name) { (void)name; return 0; 
 SP_WEAK void runtime_pad_report(void) {}
 SP_WEAK int runtime_pad_describe(void) { return 0; }
 
-uintptr_t runtime_videodec_resolve(const char *name) { (void)name; return 0; }
+SP_WEAK uintptr_t runtime_videodec_resolve(const char *name) { (void)name; return 0; }
 
-uintptr_t runtime_ajm_resolve(const char *name) { (void)name; return 0; }
-void runtime_ajm_report(void) {}
+SP_WEAK uintptr_t runtime_ajm_resolve(const char *name) { (void)name; return 0; }
+SP_WEAK void runtime_ajm_report(void) {}
+
+/* libSceAjm's MP3 path is FFmpeg-backed (runtime_mp3.c); ATRAC9 in the GPU app
+ * does not need it. These keep runtime_ajm.c linkable and fail MP3 cleanly. */
+SP_WEAK int runtime_mp3_parse(const unsigned char *data, uint32_t size, int parse_ofl,
+                              int layer3_only, Mp3Frame *frame) {
+    (void)data; (void)size; (void)parse_ofl; (void)layer3_only; (void)frame;
+    return 1;
+}
+SP_WEAK Mp3Decoder *runtime_mp3_open(void) { return 0; }
+SP_WEAK void runtime_mp3_close(Mp3Decoder *decoder) { (void)decoder; }
+SP_WEAK void runtime_mp3_reset(Mp3Decoder *decoder) { (void)decoder; }
+SP_WEAK int runtime_mp3_decode(Mp3Decoder *decoder, const unsigned char *data, int size,
+                               float *pcm, int max_samples, int *channels) {
+    (void)decoder; (void)data; (void)size; (void)pcm; (void)max_samples; (void)channels;
+    return -1;
+}
 
 /* probe.c --vulkan-only; the session never asks for it. */
 int vulkan_smoke(void) { return 1; }

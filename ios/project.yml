@@ -154,6 +154,11 @@ targets:
         compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
       - path: ../src/runtime_audio.c
         compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
+      - path: ../src/runtime_ajm.c
+        compilerFlags: "-include $(SRCROOT)/Runtime/platform/sp_compat.h"
+      # ATRAC9 (the game's audio codec) is a small pure-C decoder; MP3 stays on
+      # the FFmpeg-less weak stub.
+      - path: ../third_party/LibAtrac9/C/src
     dependencies:
       - target: SpartanRuntime
       - target: SpartanPortMemoryHostGPU

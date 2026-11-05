@@ -43,6 +43,7 @@ FEX_IOS="$ROOT/third_party/FEX/build-ios"
 
 # --- submodules the GPU library compiles -----------------------------------
 git -C "$ROOT" submodule update --init --recursive \
+    third_party/LibAtrac9 \
     gpu/third_party/imgui gpu/third_party/magic_enum gpu/third_party/miniz gpu/third_party/xbyak
 
 # --- SDL3 ------------------------------------------------------------------
