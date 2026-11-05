@@ -9,6 +9,7 @@
 
 #include "spartanport_threads.h"
 #include "spartanport_toggles.h"
+#include "common/polyfill_thread.h"
 #include "common/thread.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/amdgpu/pm4_cmds.h"
@@ -332,7 +333,7 @@ void DrawPreparation::ScannerLoop(std::stop_token stop) {
     u64 next_seq = 0;
     {
         std::unique_lock lk{mutex};
-        cv.wait(lk, stop, [&] { return baseline_ready; });
+        Common::CondvarWait(cv, lk, stop, [&] { return baseline_ready; });
         if (stop.stop_requested()) {
             return;
         }
@@ -345,7 +346,7 @@ void DrawPreparation::ScannerLoop(std::stop_token stop) {
         std::shared_ptr<Submission> submission;
         {
             std::unique_lock lk{mutex};
-            cv.wait(lk, stop, [&] {
+            Common::CondvarWait(cv, lk, stop, [&] {
                 return next_seq < tail_seq ||
                        (!submissions.empty() && submissions.back()->seq >= next_seq);
             });
@@ -409,7 +410,7 @@ void DrawPreparation::WorkerLoop(std::stop_token stop, u32 index) {
         {
             std::unique_lock lk{mutex};
             // gpu_seq moves without the lock: keep the candidate the predicate found.
-            cv.wait(lk, stop, [&] {
+            Common::CondvarWait(cv, lk, stop, [&] {
                 target = baseline_ready ? claimable() : nullptr;
                 return target != nullptr;
             });

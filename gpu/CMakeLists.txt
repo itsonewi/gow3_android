@@ -217,10 +217,12 @@ endif()
 file(GLOB SHIM_SOURCES CONFIGURE_DEPENDS shim/*.cpp shim/*/*.cpp)
 if (SPARTAN_IOS)
     list(FILTER VIDEO_CORE EXCLUDE REGEX "fsr_driver\\.cpp$")
+    list(FILTER VIDEO_CORE EXCLUDE REGEX "vk_frame_generation\\.cpp$")
     list(FILTER SHIM_SOURCES EXCLUDE REGEX "window\\.cpp$")
     list(FILTER SHIM_SOURCES EXCLUDE REGEX "spartanport_png\\.cpp$")
     list(FILTER SHIM_SOURCES EXCLUDE REGEX "spartanport_trophy_media\\.cpp$")
-    list(APPEND SHIM_SOURCES shim/window_ios.mm shim/fsr_stub.cpp shim/ios_stub.cpp)
+    list(APPEND SHIM_SOURCES shim/window_ios.mm shim/fsr_stub.cpp shim/ios_stub.cpp
+        shim/frame_generation_stub.cpp)
     set_source_files_properties(shim/window_ios.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 endif()
 # Windows: a DLL cannot leave the runtime_* symbols for spartanport-probe.exe to resolve, so the
