@@ -239,11 +239,18 @@ if (WIN32 OR SPARTAN_IOS)
 else()
     set(SPARTANGPU_KIND SHARED)
 endif()
+# video_utils.cpp copies an AVFrame and is only called by avplayer_source.cpp,
+# which the iOS build replaces with shim/avplayer_stub.cpp.
+if (SPARTAN_IOS)
+    set(SPARTAN_VIDEODEC "")
+else()
+    set(SPARTAN_VIDEODEC shadps4/core/libraries/videodec/video_utils.cpp)
+endif()
 add_library(spartanportgpu ${SPARTANGPU_KIND} ${VIDEO_CORE} ${RECOMPILER} ${COMMON} ${SHIM_SOURCES}
     shadps4/core/libraries/gnmdriver/gnmdriver.cpp
     shadps4/core/libraries/videoout/driver.cpp shadps4/core/libraries/videoout/video_out.cpp
     shadps4/core/libraries/kernel/equeue.cpp ${AVPLAYER}
-    shadps4/core/libraries/videodec/video_utils.cpp)
+    ${SPARTAN_VIDEODEC})
 # Android runtime artifact: the shared library ships as libgportgpu.so (gport framework naming).
 set_target_properties(spartanportgpu PROPERTIES OUTPUT_NAME gportgpu)
 add_dependencies(spartanportgpu host_shaders)
